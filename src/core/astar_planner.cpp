@@ -35,24 +35,9 @@ std::optional<Path> AStarPathPlanner::plan_path(const Position& start_pos, const
     auto start_grid = world_to_grid(start_pos);
     auto goal_grid = world_to_grid(goal_pos);
     
-    std::printf("A* 経路計画開始:\n");
-    std::printf("  開始位置 (世界): (%.3f, %.3f)\n", start_pos.x, start_pos.y);
-    std::printf("  開始位置 (グリッド): (%d, %d)\n", start_grid.first, start_grid.second);
-    std::printf("  目標位置 (世界): (%.3f, %.3f)\n", goal_pos.x, goal_pos.y);
-    std::printf("  目標位置 (グリッド): (%d, %d)\n", goal_grid.first, goal_grid.second);
-    std::printf("  グリッドサイズ: %dx%d\n", width_, height_);
-    std::printf("  解像度: %.3f m/cell\n", resolution_);
-    std::printf("  原点: (%.3f, %.3f)\n", origin_.x, origin_.y);
-    std::printf("  壁クリアランス: %.3f m\n", wall_clearance_distance_);
     
     // 開始・終了位置の有効性チェック
-    if (!is_valid_position(start_grid)) {
-        std::cerr << "開始位置が無効: (" << start_grid.first << ", " << start_grid.second << ")" << std::endl;
-        return std::nullopt;
-    }
-    
-    if (!is_valid_position(goal_grid)) {
-        std::cerr << "目標位置が無効: (" << goal_grid.first << ", " << goal_grid.second << ")" << std::endl;
+    if (!is_valid_position(start_grid) || !is_valid_position(goal_grid)) {
         return std::nullopt;
     }
     
@@ -89,11 +74,8 @@ std::optional<Path> AStarPathPlanner::plan_path(const Position& start_pos, const
         // ゴール到達チェック
         if (current_pos == goal_grid) {
             auto path = reconstruct_path(current_node);
-            std::printf("A* 経路計画成功: %zu 点の経路（スムージング前）\n", path.points.size());
-            
             // 経路スムージング
             auto smoothed_path = smooth_path(path);
-            std::printf("スムージング後: %zu 点の経路\n", smoothed_path.points.size());
             
             return smoothed_path;
         }
@@ -141,7 +123,6 @@ std::optional<Path> AStarPathPlanner::plan_path(const Position& start_pos, const
     }
     
     // 経路が見つからない
-    std::cerr << "経路が見つかりませんでした" << std::endl;
     return std::nullopt;
 }
 

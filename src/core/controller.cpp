@@ -90,7 +90,6 @@ ControlOutput TVVFVOController::update(const RobotState& robot_state,
         return control_output;
         
     } catch (const std::exception& e) {
-        std::cerr << "制御計算エラー: " << e.what() << std::endl;
         return ControlOutput(
             Velocity(0.0, 0.0),
             0.0,
