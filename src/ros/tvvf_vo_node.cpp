@@ -590,10 +590,13 @@ visualization_msgs::msg::Marker TVVFVONode::create_goal_marker(int marker_id) {
 
 void TVVFVONode::print_debug_info(const std::unordered_map<std::string, double>& stats, 
                                  double distance_to_goal) {
+    double safety = stats.at("safety_margin");
+    std::string safety_str = (safety > 100.0) ? "INF" : std::to_string(safety).substr(0, 4) + "m";
+    
     RCLCPP_INFO(this->get_logger(),
-        "TVVF-VO: computation=%.1fms, VO_cones=%d, safety=%.2fm, goal_dist=%.2fm",
+        "TVVF-VO: computation=%.1fms, VO_cones=%d, safety=%s, goal_dist=%.2fm",
         stats.at("computation_time"), static_cast<int>(stats.at("num_vo_cones")),
-        stats.at("safety_margin"), distance_to_goal);
+        safety_str.c_str(), distance_to_goal);
 }
 
 

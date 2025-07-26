@@ -94,7 +94,7 @@ std::unordered_map<std::string, double> TVVFVOController::get_stats() const {
 double TVVFVOController::compute_safety_margin(const RobotState& robot_state,
                                               const std::vector<DynamicObstacle>& obstacles) {
     if (obstacles.empty()) {
-        return std::numeric_limits<double>::max();
+        return 10.0;  // 障害物がない場合は安全な大きな値を返す
     }
     
     double min_distance = std::numeric_limits<double>::max();
