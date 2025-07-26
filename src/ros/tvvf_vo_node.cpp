@@ -39,6 +39,13 @@ TVVFVONode::TVVFVONode() : Node("tvvf_vo_c_node") {
     clicked_point_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
         "clicked_point", 10, std::bind(&TVVFVONode::clicked_point_callback, this, std::placeholders::_1));
 
+    // obstacle_tracker からの障害物データをsubscribe
+    dynamic_obstacles_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
+        "dynamic_obstacles", 10, std::bind(&TVVFVONode::dynamic_obstacles_callback, this, std::placeholders::_1));
+    
+    static_obstacles_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
+        "static_obstacles", 10, std::bind(&TVVFVONode::static_obstacles_callback, this, std::placeholders::_1));
+
     // タイマー初期化（制御ループ：20Hz）
     control_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50), std::bind(&TVVFVONode::control_loop, this));
@@ -182,6 +189,59 @@ void TVVFVONode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
     }
 }
 
+void TVVFVONode::dynamic_obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg) {
+    try {
+        dynamic_obstacles_.clear();
+        
+        for (const auto& marker : msg->markers) {
+            if (marker.action == visualization_msgs::msg::Marker::ADD) {
+                // マーカーから障害物情報を抽出
+                Position position(marker.pose.position.x, marker.pose.position.y);
+                Velocity velocity(0.0, 0.0);  // 速度情報は予測しないため0
+                double radius = std::max(marker.scale.x, marker.scale.y) / 2.0;
+                
+                dynamic_obstacles_.emplace_back(
+                    marker.id,
+                    position,
+                    velocity,
+                    radius
+                );
+            }
+        }
+        
+        RCLCPP_DEBUG(this->get_logger(), "Received %zu dynamic obstacles", dynamic_obstacles_.size());
+        
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(this->get_logger(), "Dynamic obstacles callback error: %s", e.what());
+    }
+}
+
+void TVVFVONode::static_obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg) {
+    try {
+        static_obstacles_.clear();
+        
+        for (const auto& marker : msg->markers) {
+            if (marker.action == visualization_msgs::msg::Marker::ADD) {
+                // マーカーから障害物情報を抽出
+                Position position(marker.pose.position.x, marker.pose.position.y);
+                Velocity velocity(0.0, 0.0);  // 静的障害物の速度は0
+                double radius = std::max(marker.scale.x, marker.scale.y) / 2.0;
+                
+                static_obstacles_.emplace_back(
+                    marker.id,
+                    position,
+                    velocity,
+                    radius
+                );
+            }
+        }
+        
+        RCLCPP_DEBUG(this->get_logger(), "Received %zu static obstacles", static_obstacles_.size());
+        
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(this->get_logger(), "Static obstacles callback error: %s", e.what());
+    }
+}
 
 void TVVFVONode::plan_path_to_goal() {
     try {
@@ -243,11 +303,15 @@ void TVVFVONode::control_loop() {
             return;
         }
 
-        // TVVF-VO制御更新（障害物なしで実行）
-        std::vector<DynamicObstacle> empty_obstacles;
+        // 動的・静的障害物を統合
+        std::vector<DynamicObstacle> all_obstacles;
+        all_obstacles.insert(all_obstacles.end(), dynamic_obstacles_.begin(), dynamic_obstacles_.end());
+        all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
+        
+        // TVVF-VO制御更新（obstacle_trackerからの障害物を使用）
         double control_start_time = time_utils::get_current_time();
         auto control_output = controller_->update(
-            robot_state_.value(), empty_obstacles, goal_.value(), planned_path_);
+            robot_state_.value(), all_obstacles, goal_.value(), planned_path_);
         double control_time = (time_utils::get_current_time() - control_start_time) * 1000;  // ms
 
         // 制御コマンド発行

@@ -41,6 +41,8 @@ private:
     // 状態変数
     std::optional<RobotState> robot_state_;
     std::optional<Goal> goal_;
+    std::vector<DynamicObstacle> dynamic_obstacles_;
+    std::vector<DynamicObstacle> static_obstacles_;
     std::optional<nav_msgs::msg::OccupancyGrid> occupancy_grid_;
     std::optional<Path> planned_path_;
     
@@ -62,6 +64,8 @@ private:
     // サブスクライバー
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_sub_;
+    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr dynamic_obstacles_sub_;
+    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr static_obstacles_sub_;
 
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
@@ -97,6 +101,18 @@ private:
      * @param msg OccupancyGridメッセージ
      */
     void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
+
+    /**
+     * @brief 動的障害物データコールバック
+     * @param msg MarkerArrayメッセージ
+     */
+    void dynamic_obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg);
+
+    /**
+     * @brief 静的障害物データコールバック
+     * @param msg MarkerArrayメッセージ
+     */
+    void static_obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg);
 
     /**
      * @brief 現在位置からゴールまでの経路を計画

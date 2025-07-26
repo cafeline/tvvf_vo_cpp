@@ -186,6 +186,23 @@ private:
     std::array<double, 2> safe_normalize_with_default(const std::array<double, 2>& vector,
                                                      double min_norm = 1e-8,
                                                      const std::array<double, 2>& default_value = {1.0, 0.0});
+
+    /**
+     * @brief スタック回避のための適応的力合成
+     * @param position 現在位置
+     * @param path_force A*経路追従力
+     * @param goal_force ゴール引力
+     * @param repulsive_force 斥力
+     * @param time_correction 時間補正
+     * @param obstacles 障害物リスト
+     * @return 統合された力ベクトル
+     */
+    std::array<double, 2> adaptive_force_composition(const Position& position,
+                                                    const std::array<double, 2>& path_force,
+                                                    const std::array<double, 2>& goal_force,
+                                                    const std::array<double, 2>& repulsive_force,
+                                                    const std::array<double, 2>& time_correction,
+                                                    const std::vector<DynamicObstacle>& obstacles);
 };
 
 } // namespace tvvf_vo_c

@@ -27,11 +27,9 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
     // 3. 時間依存補正項
     auto time_correction = compute_time_correction(position, time, obstacles, goal);
     
-    // 4. 合成（A*経路を優先）
-    std::array<double, 2> total_force = {
-        path_force[0] + goal_force[0] + repulsive_force[0] + time_correction[0],
-        path_force[1] + goal_force[1] + repulsive_force[1] + time_correction[1]
-    };
+    // 4. スタック回避のための適応的合成
+    std::array<double, 2> total_force = adaptive_force_composition(
+        position, path_force, goal_force, repulsive_force, time_correction, obstacles);
     
     // 5. 数値安定性とクリッピング
     total_force = clip_magnitude(total_force, config_.max_force);
@@ -340,6 +338,66 @@ std::array<double, 2> TVVFGenerator::safe_normalize_with_default(const std::arra
         return default_value;
     }
     return {vector[0] / norm, vector[1] / norm};
+}
+
+std::array<double, 2> TVVFGenerator::adaptive_force_composition(const Position& position,
+                                                              const std::array<double, 2>& path_force,
+                                                              const std::array<double, 2>& goal_force,
+                                                              const std::array<double, 2>& repulsive_force,
+                                                              const std::array<double, 2>& time_correction,
+                                                              const std::vector<DynamicObstacle>& obstacles) {
+    // 1. 障害物との距離に基づく重み計算
+    double min_obstacle_distance = std::numeric_limits<double>::max();
+    for (const auto& obstacle : obstacles) {
+        double distance = position.distance_to(obstacle.position) - obstacle.radius;
+        min_obstacle_distance = std::min(min_obstacle_distance, distance);
+    }
+    
+    // 2. スタック回避のための適応的重み
+    double danger_threshold = config_.safety_margin * 2.0;
+    double path_weight = 1.0;
+    double repulsive_weight = 1.0;
+    
+    if (min_obstacle_distance < danger_threshold) {
+        // 危険区域では斥力を強調し、経路追従を調整
+        double danger_ratio = std::max(0.0, (danger_threshold - min_obstacle_distance) / danger_threshold);
+        repulsive_weight = 1.0 + 2.0 * danger_ratio;  // 斥力を2-3倍に強化
+        
+        // 斥力と経路の方向の一致度を評価
+        double repulsive_magnitude = std::sqrt(repulsive_force[0] * repulsive_force[0] + 
+                                             repulsive_force[1] * repulsive_force[1]);
+        double path_magnitude = std::sqrt(path_force[0] * path_force[0] + 
+                                        path_force[1] * path_force[1]);
+        
+        if (repulsive_magnitude > 1e-6 && path_magnitude > 1e-6) {
+            double dot_product = (repulsive_force[0] * path_force[0] + repulsive_force[1] * path_force[1]) /
+                               (repulsive_magnitude * path_magnitude);
+            
+            if (dot_product < 0.0) {  // 斥力と経路方向が逆向き（スタックの兆候）
+                // 経路を斥力方向に調整
+                path_weight = 0.3 + 0.4 * (1.0 + dot_product);  // 0.3-0.7の範囲で調整
+            }
+        }
+    }
+    
+    // 3. ゴールに近い場合のゴール引力強化
+    double goal_distance = std::sqrt((goal_force[0] * goal_force[0] + goal_force[1] * goal_force[1]));
+    double goal_weight = (goal_distance < 1.0) ? 1.5 : 1.0;
+    
+    // 4. 合成
+    std::array<double, 2> total_force = {
+        path_weight * path_force[0] + 
+        goal_weight * goal_force[0] + 
+        repulsive_weight * repulsive_force[0] + 
+        time_correction[0],
+        
+        path_weight * path_force[1] + 
+        goal_weight * goal_force[1] + 
+        repulsive_weight * repulsive_force[1] + 
+        time_correction[1]
+    };
+    
+    return total_force;
 }
 
 } // namespace tvvf_vo_c
