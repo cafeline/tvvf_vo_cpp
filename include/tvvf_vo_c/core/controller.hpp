@@ -43,6 +43,12 @@ public:
      */
     std::unordered_map<std::string, double> get_stats() const;
 
+    /**
+     * @brief TVVFGeneratorへのアクセス（可視化用）
+     * @return TVVFGeneratorの参照
+     */
+    const TVVFGenerator& get_tvvf_generator() const;
+
 private:
     TVVFVOConfig config_;
     TVVFGenerator tvvf_generator_;

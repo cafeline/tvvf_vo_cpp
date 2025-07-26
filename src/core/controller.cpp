@@ -91,6 +91,10 @@ std::unordered_map<std::string, double> TVVFVOController::get_stats() const {
     return stats_;
 }
 
+const TVVFGenerator& TVVFVOController::get_tvvf_generator() const {
+    return tvvf_generator_;
+}
+
 double TVVFVOController::compute_safety_margin(const RobotState& robot_state,
                                               const std::vector<DynamicObstacle>& obstacles) {
     if (obstacles.empty()) {

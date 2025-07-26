@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <algorithm>
+#include <tf2/LinearMath/Quaternion.h>
 
 namespace tvvf_vo_c {
 
@@ -90,6 +91,13 @@ void TVVFVONode::setup_parameters() {
 
     // 可視化
     this->declare_parameter("enable_visualization", true);
+    this->declare_parameter("enable_vector_field_viz", true);
+    this->declare_parameter("vector_field_resolution", 0.5);
+    this->declare_parameter("vector_field_range", 4.0);
+    this->declare_parameter("vector_scale_factor", 0.3);
+    this->declare_parameter("max_vector_points", 500);
+    this->declare_parameter("min_vector_magnitude", 0.05);
+    this->declare_parameter("viz_update_rate", 5.0);
 }
 
 TVVFVOConfig TVVFVONode::create_config_from_parameters() {
@@ -277,9 +285,7 @@ void TVVFVONode::control_loop() {
 
     try {
         // ロボット状態の更新
-        double tf_start_time = time_utils::get_current_time();
         robot_state_ = get_robot_pose_from_tf();
-        double tf_time = (time_utils::get_current_time() - tf_start_time) * 1000;  // ms
 
         // 状態チェック
         if (!robot_state_.has_value() || !goal_.has_value()) {
@@ -308,34 +314,32 @@ void TVVFVONode::control_loop() {
         all_obstacles.insert(all_obstacles.end(), dynamic_obstacles_.begin(), dynamic_obstacles_.end());
         all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
         
-        // TVVF-VO制御更新（obstacle_trackerからの障害物を使用）
-        double control_start_time = time_utils::get_current_time();
+            // TVVF-VO制御更新
         auto control_output = controller_->update(
             robot_state_.value(), all_obstacles, goal_.value(), planned_path_);
-        double control_time = (time_utils::get_current_time() - control_start_time) * 1000;  // ms
 
         // 制御コマンド発行
         publish_control_command(control_output);
 
-        // 統計情報と可視化
+        // デバッグ情報出力
         auto stats = controller_->get_stats();
-        print_debug_info(stats, distance_to_goal);
+        static int counter = 0;
+        if (++counter % 5 == 0) {
+            double total_time = (time_utils::get_current_time() - loop_start_time) * 1000;
+            RCLCPP_INFO(this->get_logger(), 
+                "Control Loop - %.2f ms, VO_cones: %d, safety: %.1fm, goal: %.2fm, Freq: %.1f Hz",
+                total_time, static_cast<int>(stats.at("num_vo_cones")), 
+                stats.at("safety_margin"), distance_to_goal, 1000.0 / total_time);
+        }
 
-        double viz_start_time = time_utils::get_current_time();
+        // 可視化
         if (this->get_parameter("enable_visualization").as_bool()) {
             publish_visualization();
         }
-        double viz_time = (time_utils::get_current_time() - viz_start_time) * 1000;  // ms
         
-        // 処理時間の合計
-        double total_time = (time_utils::get_current_time() - loop_start_time) * 1000;  // ms
-        
-        // 処理速度情報を出力（5回に1回）
-        static int counter = 0;
-        if (++counter % 5 == 0) {
-            RCLCPP_INFO(this->get_logger(), 
-                "Control Loop - Total: %.2f ms, TF: %.2f ms, Control: %.2f ms, Viz: %.2f ms, Freq: %.1f Hz",
-                total_time, tf_time, control_time, viz_time, 1000.0 / total_time);
+        // ベクトル場可視化（独立したフラグで制御）
+        if (this->get_parameter("enable_vector_field_viz").as_bool()) {
+            publish_vector_field_visualization();
         }
 
     } catch (const std::exception& e) {
@@ -405,11 +409,68 @@ void TVVFVONode::publish_visualization() {
             auto goal_marker = create_goal_marker(0);
             marker_array.markers.push_back(goal_marker);
         }
+        
+        // 現在の目標点（lookahead point）を可視化
+        if (robot_state_.has_value() && planned_path_.has_value() && !planned_path_->empty()) {
+            try {
+                size_t closest_idx = 0;
+                double min_distance = std::numeric_limits<double>::max();
+                
+                // 最も近い経路点を見つける
+                for (size_t i = 0; i < planned_path_->points.size(); ++i) {
+                    double distance = robot_state_->position.distance_to(planned_path_->points[i].position);
+                    if (distance < min_distance) {
+                        min_distance = distance;
+                        closest_idx = i;
+                    }
+                }
+                
+                // 先読み点を計算（簡易版）
+                double lookahead_distance = this->get_parameter("lookahead_distance").as_double();
+                double accumulated_distance = 0.0;
+                size_t target_idx = closest_idx;
+                
+                for (size_t i = closest_idx; i < planned_path_->points.size() - 1; ++i) {
+                    double segment_distance = planned_path_->points[i].position.distance_to(
+                        planned_path_->points[i + 1].position);
+                    accumulated_distance += segment_distance;
+                    
+                    if (accumulated_distance >= lookahead_distance) {
+                        target_idx = i + 1;
+                        break;
+                    }
+                }
+                
+                // 現在の目標点マーカー
+                auto target_marker = visualization_msgs::msg::Marker();
+                target_marker.header.frame_id = this->get_parameter("global_frame").as_string();
+                target_marker.header.stamp = this->get_clock()->now();
+                target_marker.id = 1;
+                target_marker.type = visualization_msgs::msg::Marker::CYLINDER;
+                target_marker.action = visualization_msgs::msg::Marker::ADD;
+                
+                target_marker.pose.position.x = planned_path_->points[target_idx].position.x;
+                target_marker.pose.position.y = planned_path_->points[target_idx].position.y;
+                target_marker.pose.position.z = 0.0;
+                target_marker.pose.orientation.w = 1.0;
+                
+                target_marker.scale.x = 0.3;  // 直径30cm
+                target_marker.scale.y = 0.3;
+                target_marker.scale.z = 0.15; // 高さ15cm
+                
+                target_marker.color.r = 1.0;  // 黄色
+                target_marker.color.g = 1.0;
+                target_marker.color.b = 0.0;
+                target_marker.color.a = 0.7;
+                
+                marker_array.markers.push_back(target_marker);
+                
+            } catch (const std::exception& e) {
+                RCLCPP_DEBUG(this->get_logger(), "Target point visualization error: %s", e.what());
+            }
+        }
 
         marker_pub_->publish(marker_array);
-
-        // ベクトル場の可視化を追加
-        publish_vector_field_visualization();
 
     } catch (const std::exception& e) {
         RCLCPP_ERROR(this->get_logger(), "Visualization error: %s", e.what());
@@ -443,13 +504,57 @@ void TVVFVONode::publish_path_visualization() {
         }
 
         // 線の設定
-        line_marker.scale.x = 0.05;  // 線の太さ
+        line_marker.scale.x = 0.03;  // 線の太さ
         line_marker.color.r = 1.0;   // 赤色
         line_marker.color.g = 0.0;
         line_marker.color.b = 0.0;
-        line_marker.color.a = 0.8;   // 透明度
+        line_marker.color.a = 0.6;   // 透明度
 
         marker_array.markers.push_back(line_marker);
+        
+        // A*経路点を個別に球体マーカーで可視化
+        for (size_t i = 0; i < planned_path_->points.size(); ++i) {
+            auto point_marker = visualization_msgs::msg::Marker();
+            point_marker.header.frame_id = global_frame;
+            point_marker.header.stamp = this->get_clock()->now();
+            point_marker.id = static_cast<int>(i + 1);  // line_markerと重複しないようにi+1
+            point_marker.type = visualization_msgs::msg::Marker::SPHERE;
+            point_marker.action = visualization_msgs::msg::Marker::ADD;
+            
+            // 位置設定
+            point_marker.pose.position.x = planned_path_->points[i].position.x;
+            point_marker.pose.position.y = planned_path_->points[i].position.y;
+            point_marker.pose.position.z = 0.1;  // 線より少し高く
+            point_marker.pose.orientation.w = 1.0;
+            
+            // サイズ設定
+            point_marker.scale.x = 0.1;  // 直径10cm
+            point_marker.scale.y = 0.1;
+            point_marker.scale.z = 0.1;
+            
+            // 色設定（開始点、中間点、終了点で色分け）
+            if (i == 0) {
+                // 開始点：青色
+                point_marker.color.r = 0.0;
+                point_marker.color.g = 0.0;
+                point_marker.color.b = 1.0;
+                point_marker.color.a = 1.0;
+            } else if (i == planned_path_->points.size() - 1) {
+                // 終了点：緑色
+                point_marker.color.r = 0.0;
+                point_marker.color.g = 1.0;
+                point_marker.color.b = 0.0;
+                point_marker.color.a = 1.0;
+            } else {
+                // 中間点：オレンジ色
+                point_marker.color.r = 1.0;
+                point_marker.color.g = 0.5;
+                point_marker.color.b = 0.0;
+                point_marker.color.a = 0.8;
+            }
+            
+            marker_array.markers.push_back(point_marker);
+        }
         path_pub_->publish(marker_array);
 
     } catch (const std::exception& e) {
@@ -479,67 +584,118 @@ void TVVFVONode::publish_empty_visualization() {
 
 void TVVFVONode::publish_vector_field_visualization() {
     try {
-        double vf_start_time = time_utils::get_current_time();
-        
         if (!robot_state_.has_value() || !goal_.has_value()) {
             return;
         }
 
-        // ベクトル場計算用のグリッドを作成
+        // 統合ベクトル場計算用のグリッドを作成
         std::vector<Position> grid_positions;
-        std::vector<Force> grid_forces;
+        std::vector<std::array<double, 2>> grid_forces;
         
-        double grid_spacing = 0.5;  // グリッド間隔 [m]
-        double grid_range = 3.0;    // ロボット周囲の範囲 [m]
+        // パラメータから可視化設定を取得
+        double grid_spacing = this->get_parameter("vector_field_resolution").as_double();
+        double grid_range = this->get_parameter("vector_field_range").as_double();
+        double scale_factor = this->get_parameter("vector_scale_factor").as_double();
+        int max_points = this->get_parameter("max_vector_points").as_int();
+        double min_magnitude = this->get_parameter("min_vector_magnitude").as_double();
         
         Position robot_pos = robot_state_->position;
         
-        // ロボット周囲にグリッドを配置
+        // 動的・静的障害物を統合
+        std::vector<DynamicObstacle> all_obstacles;
+        all_obstacles.insert(all_obstacles.end(), dynamic_obstacles_.begin(), dynamic_obstacles_.end());
+        all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
+        
+        // ロボット周囲にグリッドを配置してTVVFを計算
         for (double x = robot_pos.x - grid_range; x <= robot_pos.x + grid_range; x += grid_spacing) {
             for (double y = robot_pos.y - grid_range; y <= robot_pos.y + grid_range; y += grid_spacing) {
                 Position grid_pos(x, y);
                 
-                // TVVF力を計算
-                Force tvvf_force(0.0, 0.0);
-                
-                // 簡略化された引力場計算
-                Position goal_pos = goal_->position;
-                Position relative_pos = Position(
-                    goal_pos.x - grid_pos.x,
-                    goal_pos.y - grid_pos.y
-                );
-                
-                double distance = relative_pos.distance_to(Position(0, 0));
-                if (distance > 0.1) {
-                    // 正規化された引力方向
-                    double attraction_strength = std::min(2.0, 1.0 / distance);
-                    tvvf_force = Force(
-                        (relative_pos.x / distance) * attraction_strength,
-                        (relative_pos.y / distance) * attraction_strength
-                    );
-                }
-                
-                // 力が十分大きい場合のみ追加
-                if (tvvf_force.magnitude() > 0.1) {
-                    grid_positions.push_back(grid_pos);
-                    grid_forces.push_back(tvvf_force);
+                // TVVFGeneratorを使用して統合ベクトル場を計算
+                if (controller_) {
+                    const auto& tvvf_generator = controller_->get_tvvf_generator();
+                    auto integrated_force = tvvf_generator.compute_vector(
+                        grid_pos, 0.0, goal_.value(), all_obstacles, planned_path_);
+                    
+                    // 力が十分大きい場合のみ可視化対象とする
+                    double force_magnitude = std::sqrt(integrated_force[0] * integrated_force[0] + 
+                                                      integrated_force[1] * integrated_force[1]);
+                    if (force_magnitude > min_magnitude) {
+                        grid_positions.push_back(grid_pos);
+                        grid_forces.push_back(integrated_force);
+                    }
                 }
             }
         }
         
-        // ベクトル場マーカーを作成・発行
+        // 最大点数制限を適用
+        if (static_cast<int>(grid_positions.size()) > max_points) {
+            // 等間隔で間引く
+            int step = grid_positions.size() / max_points;
+            std::vector<Position> limited_positions;
+            std::vector<std::array<double, 2>> limited_forces;
+            
+            for (size_t i = 0; i < grid_positions.size(); i += step) {
+                limited_positions.push_back(grid_positions[i]);
+                limited_forces.push_back(grid_forces[i]);
+            }
+            
+            grid_positions = std::move(limited_positions);
+            grid_forces = std::move(limited_forces);
+        }
+        
+        // 統合ベクトル場マーカーを作成・発行
         if (!grid_positions.empty()) {
+            auto marker_array = visualization_msgs::msg::MarkerArray();
             std::string global_frame = this->get_parameter("global_frame").as_string();
-            TVVFVOVisualizer visualizer(*this, global_frame);
             
-            auto vector_field_markers = visualizer.create_vector_field_markers(
-                grid_positions, grid_forces, 1000);
+            for (size_t i = 0; i < grid_positions.size(); ++i) {
+                auto arrow_marker = visualization_msgs::msg::Marker();
+                arrow_marker.header.frame_id = global_frame;
+                arrow_marker.header.stamp = this->get_clock()->now();
+                arrow_marker.id = static_cast<int>(i);
+                arrow_marker.type = visualization_msgs::msg::Marker::ARROW;
+                arrow_marker.action = visualization_msgs::msg::Marker::ADD;
+                
+                // 矢印の開始点
+                arrow_marker.pose.position.x = grid_positions[i].x;
+                arrow_marker.pose.position.y = grid_positions[i].y;
+                arrow_marker.pose.position.z = 0.1;
+                
+                // 矢印の方向（ベクトル場の方向）
+                double force_magnitude = std::sqrt(grid_forces[i][0] * grid_forces[i][0] + 
+                                                  grid_forces[i][1] * grid_forces[i][1]);
+                if (force_magnitude > 1e-6) {
+                    double yaw = std::atan2(grid_forces[i][1], grid_forces[i][0]);
+                    tf2::Quaternion q;
+                    q.setRPY(0, 0, yaw);
+                    arrow_marker.pose.orientation.x = q.x();
+                    arrow_marker.pose.orientation.y = q.y();
+                    arrow_marker.pose.orientation.z = q.z();
+                    arrow_marker.pose.orientation.w = q.w();
+                }
+                
+                // 矢印のサイズ（力の大きさとスケール係数に比例）
+                double arrow_length = std::min(1.0, force_magnitude * scale_factor);
+                arrow_marker.scale.x = arrow_length;  // 長さ
+                arrow_marker.scale.y = 0.05;          // 幅
+                arrow_marker.scale.z = 0.05;          // 高さ
+                
+                // 色設定（統合ベクトル場は緑色）
+                arrow_marker.color.r = 0.0;
+                arrow_marker.color.g = 1.0;
+                arrow_marker.color.b = 0.0;
+                arrow_marker.color.a = 0.8;
+                
+                // 生存時間（更新レートに基づいて設定）
+                double update_rate = this->get_parameter("viz_update_rate").as_double();
+                double lifetime = std::max(0.1, 2.0 / update_rate);  // 更新間隔の2倍
+                arrow_marker.lifetime = rclcpp::Duration::from_seconds(lifetime);
+                
+                marker_array.markers.push_back(arrow_marker);
+            }
             
-            vector_field_pub_->publish(vector_field_markers);
-            
-            double vf_time = (time_utils::get_current_time() - vf_start_time) * 1000;  // ms
-            RCLCPP_INFO(this->get_logger(), "Vector Field - Markers: %zu, Time: %.2f ms", 
-                        vector_field_markers.markers.size(), vf_time);
+            vector_field_pub_->publish(marker_array);
         }
 
     } catch (const std::exception& e) {
@@ -571,16 +727,6 @@ visualization_msgs::msg::Marker TVVFVONode::create_goal_marker(int marker_id) {
     return marker;
 }
 
-void TVVFVONode::print_debug_info(const std::unordered_map<std::string, double>& stats, 
-                                 double distance_to_goal) {
-    double safety = stats.at("safety_margin");
-    std::string safety_str = (safety > 100.0) ? "INF" : std::to_string(safety).substr(0, 4) + "m";
-    
-    RCLCPP_INFO(this->get_logger(),
-        "TVVF-VO: computation=%.1fms, VO_cones=%d, safety=%s, goal_dist=%.2fm",
-        stats.at("computation_time"), static_cast<int>(stats.at("num_vo_cones")),
-        safety_str.c_str(), distance_to_goal);
-}
 
 
 } // namespace tvvf_vo_c

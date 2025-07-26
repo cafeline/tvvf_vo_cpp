@@ -172,13 +172,6 @@ private:
      */
     visualization_msgs::msg::Marker create_goal_marker(int marker_id);
 
-    /**
-     * @brief デバッグ情報の出力
-     * @param stats 統計情報
-     * @param distance_to_goal ゴールまでの距離
-     */
-    void print_debug_info(const std::unordered_map<std::string, double>& stats, 
-                         double distance_to_goal);
 
 };
 
