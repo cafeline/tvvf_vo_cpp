@@ -13,6 +13,7 @@
 #include "tvvf_vo_c/core/types.hpp"
 #include "tvvf_vo_c/core/controller.hpp"
 #include "tvvf_vo_c/core/astar_planner.hpp"
+#include "tvvf_vo_c/utils/time_utils.hpp"
 
 #include <memory>
 #include <vector>
@@ -70,8 +71,10 @@ private:
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
 
-    // 統計情報
+    // 統計情報とプロファイラー
     std::unordered_map<std::string, double> stats_history_;
+    time_utils::ModuleProfiler profiler_;
+    rclcpp::TimerBase::SharedPtr profile_timer_;
 
     /**
      * @brief パラメータ設定
@@ -172,6 +175,10 @@ private:
      */
     visualization_msgs::msg::Marker create_goal_marker(int marker_id);
 
+    /**
+     * @brief パフォーマンス統計の出力
+     */
+    void publish_performance_stats();
 
 };
 

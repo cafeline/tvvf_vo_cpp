@@ -1,6 +1,7 @@
 #include "tvvf_vo_c/core/vo_calculator.hpp"
 #include <cmath>
 #include <algorithm>
+#include <numeric>
 
 namespace tvvf_vo_c {
 
@@ -11,8 +12,24 @@ std::vector<VOCone> VelocityObstacleCalculator::compute_vo_set(const RobotState&
                                                               double time_horizon) {
     std::vector<VOCone> vo_cones;
     
-    for (const auto& obstacle : obstacles) {
-        auto vo_cone = compute_single_vo(robot_state, obstacle, time_horizon);
+    // 距離による事前フィルタリング（高速化）
+    const double max_relevant_distance = time_horizon * robot_state.max_velocity + robot_state.radius + 5.0;
+    
+    std::vector<size_t> relevant_indices;
+    relevant_indices.reserve(obstacles.size());
+    
+    for (size_t i = 0; i < obstacles.size(); ++i) {
+        double distance = robot_state.position.distance_to(obstacles[i].position);
+        if (distance <= max_relevant_distance) {
+            relevant_indices.push_back(i);
+        }
+    }
+    
+    vo_cones.reserve(relevant_indices.size());
+    
+    // 関連する障害物のみ処理（高速化）
+    for (size_t idx : relevant_indices) {
+        auto vo_cone = compute_single_vo(robot_state, obstacles[idx], time_horizon);
         if (vo_cone.has_value()) {
             vo_cones.push_back(vo_cone.value());
         }

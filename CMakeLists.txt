@@ -6,8 +6,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic -O3)
+  add_compile_options(-Wall -Wextra -Wpedantic -O3 -march=native -mtune=native -ffast-math)
 endif()
+
+# パフォーマンス最適化の設定
+add_compile_definitions(NDEBUG)
+set(CMAKE_BUILD_TYPE Release)
+
+# TBB (Threading Building Blocks) for parallel algorithms
+find_package(TBB QUIET)
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
@@ -65,6 +72,13 @@ target_include_directories(${PROJECT_NAME}_node PUBLIC
 )
 
 target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME}_core)
+
+# Link TBB if available for parallel algorithms
+if(TBB_FOUND)
+  target_link_libraries(${PROJECT_NAME}_core TBB::tbb)
+  target_link_libraries(${PROJECT_NAME}_node TBB::tbb)
+  target_compile_definitions(${PROJECT_NAME}_core PRIVATE USE_TBB)
+endif()
 
 ament_target_dependencies(${PROJECT_NAME}_node
   rclcpp

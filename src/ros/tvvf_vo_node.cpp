@@ -50,6 +50,10 @@ TVVFVONode::TVVFVONode() : Node("tvvf_vo_c_node") {
     // タイマー初期化（制御ループ：20Hz）
     control_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50), std::bind(&TVVFVONode::control_loop, this));
+    
+    // パフォーマンス統計タイマー（5秒間隔で出力）
+    profile_timer_ = this->create_wall_timer(
+        std::chrono::seconds(5), std::bind(&TVVFVONode::publish_performance_stats, this));
 
     RCLCPP_INFO(this->get_logger(), "TVVF-VO C++ Node initialized");
 }
@@ -252,6 +256,8 @@ void TVVFVONode::static_obstacles_callback(const visualization_msgs::msg::Marker
 }
 
 void TVVFVONode::plan_path_to_goal() {
+    PROFILE_MODULE(profiler_, "A*_PathPlanning");
+    
     try {
         if (!path_planner_ || !robot_state_.has_value() || !goal_.has_value()) {
             RCLCPP_WARN(this->get_logger(), "Path planning: missing requirements");
@@ -281,11 +287,15 @@ void TVVFVONode::plan_path_to_goal() {
 
 
 void TVVFVONode::control_loop() {
+    PROFILE_MODULE(profiler_, "ControlLoop_Total");
     double loop_start_time = time_utils::get_current_time();
 
     try {
         // ロボット状態の更新
-        robot_state_ = get_robot_pose_from_tf();
+        {
+            PROFILE_MODULE(profiler_, "TF_Lookup");
+            robot_state_ = get_robot_pose_from_tf();
+        }
 
         // 状態チェック
         if (!robot_state_.has_value() || !goal_.has_value()) {
@@ -311,15 +321,25 @@ void TVVFVONode::control_loop() {
 
         // 動的・静的障害物を統合
         std::vector<DynamicObstacle> all_obstacles;
-        all_obstacles.insert(all_obstacles.end(), dynamic_obstacles_.begin(), dynamic_obstacles_.end());
-        all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
+        {
+            PROFILE_MODULE(profiler_, "ObstacleProcessing");
+            all_obstacles.insert(all_obstacles.end(), dynamic_obstacles_.begin(), dynamic_obstacles_.end());
+            all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
+        }
         
-            // TVVF-VO制御更新
-        auto control_output = controller_->update(
-            robot_state_.value(), all_obstacles, goal_.value(), planned_path_);
+        // TVVF-VO制御更新
+        ControlOutput control_output;
+        {
+            PROFILE_MODULE(profiler_, "TVVF_VO_Control");
+            control_output = controller_->update(
+                robot_state_.value(), all_obstacles, goal_.value(), planned_path_);
+        }
 
         // 制御コマンド発行
-        publish_control_command(control_output);
+        {
+            PROFILE_MODULE(profiler_, "PublishControl");
+            publish_control_command(control_output);
+        }
 
         // デバッグ情報出力
         auto stats = controller_->get_stats();
@@ -334,11 +354,13 @@ void TVVFVONode::control_loop() {
 
         // 可視化
         if (this->get_parameter("enable_visualization").as_bool()) {
+            PROFILE_MODULE(profiler_, "Visualization");
             publish_visualization();
         }
         
         // ベクトル場可視化（独立したフラグで制御）
         if (this->get_parameter("enable_vector_field_viz").as_bool()) {
+            PROFILE_MODULE(profiler_, "VectorField_Viz");
             publish_vector_field_visualization();
         }
 
@@ -727,6 +749,31 @@ visualization_msgs::msg::Marker TVVFVONode::create_goal_marker(int marker_id) {
     return marker;
 }
 
-
+void TVVFVONode::publish_performance_stats() {
+    try {
+        auto all_stats = profiler_.get_all_stats();
+        
+        if (all_stats.empty()) {
+            return;
+        }
+        
+        std::ostringstream oss;
+        oss << "\n" << profiler_.format_performance_summary(8);
+        
+        RCLCPP_INFO(this->get_logger(), "%s", oss.str().c_str());
+        
+        // 統計を出力した後、5分以上経ったデータをクリア
+        static auto last_clear = time_utils::get_current_time_point();
+        auto now = time_utils::get_current_time_point();
+        if (time_utils::get_elapsed_time(last_clear, now) > 300.0) {  // 5分
+            profiler_.reset_stats();
+            last_clear = now;
+            RCLCPP_INFO(this->get_logger(), "Performance statistics reset after 5 minutes");
+        }
+        
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(this->get_logger(), "Performance stats error: %s", e.what());
+    }
+}
 
 } // namespace tvvf_vo_c

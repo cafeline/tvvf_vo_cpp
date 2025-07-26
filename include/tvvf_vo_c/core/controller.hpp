@@ -55,8 +55,9 @@ private:
     VelocityObstacleCalculator vo_calculator_;
     FeasibleVelocitySelector velocity_selector_;
 
-    // 統計情報
+    // 統計情報とプロファイラー
     mutable std::unordered_map<std::string, double> stats_;
+    mutable time_utils::ModuleProfiler internal_profiler_;
 
     /**
      * @brief 現在の安全マージン計算

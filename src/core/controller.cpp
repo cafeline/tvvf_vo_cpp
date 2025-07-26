@@ -1,4 +1,5 @@
 #include "tvvf_vo_c/core/controller.hpp"
+#include "tvvf_vo_c/utils/time_utils.hpp"
 #include <chrono>
 #include <cmath>
 #include <algorithm>
@@ -42,26 +43,38 @@ ControlOutput TVVFVOController::update(const RobotState& robot_state,
         }
         
         // TVVF計算（A*経路統合版）
-        double tvvf_start = get_current_time();
-        auto tvvf_vector = tvvf_generator_.compute_vector(
-            robot_state.position, start_time, goal, obstacles, planned_path
-        );
-        stats_["tvvf_time"] = (get_current_time() - tvvf_start) * 1000;
+        std::array<double, 2> tvvf_vector;
+        {
+            PROFILE_MODULE(internal_profiler_, "TVVF_Generation");
+            double tvvf_start = get_current_time();
+            tvvf_vector = tvvf_generator_.compute_vector(
+                robot_state.position, start_time, goal, obstacles, planned_path
+            );
+            stats_["tvvf_time"] = (get_current_time() - tvvf_start) * 1000;
+        }
         
         // VO制約計算
-        double vo_start = get_current_time();
-        auto vo_cones = vo_calculator_.compute_vo_set(
-            robot_state, obstacles, config_.time_horizon
-        );
-        stats_["vo_time"] = (get_current_time() - vo_start) * 1000;
-        stats_["num_vo_cones"] = static_cast<double>(vo_cones.size());
+        std::vector<VOCone> vo_cones;
+        {
+            PROFILE_MODULE(internal_profiler_, "VO_Calculation");
+            double vo_start = get_current_time();
+            vo_cones = vo_calculator_.compute_vo_set(
+                robot_state, obstacles, config_.time_horizon
+            );
+            stats_["vo_time"] = (get_current_time() - vo_start) * 1000;
+            stats_["num_vo_cones"] = static_cast<double>(vo_cones.size());
+        }
         
         // 実行可能速度選択
-        double selection_start = get_current_time();
-        Velocity selected_velocity = velocity_selector_.select_feasible_velocity(
-            tvvf_vector, vo_cones, robot_state
-        );
-        stats_["selection_time"] = (get_current_time() - selection_start) * 1000;
+        Velocity selected_velocity;
+        {
+            PROFILE_MODULE(internal_profiler_, "Velocity_Selection");
+            double selection_start = get_current_time();
+            selected_velocity = velocity_selector_.select_feasible_velocity(
+                tvvf_vector, vo_cones, robot_state
+            );
+            stats_["selection_time"] = (get_current_time() - selection_start) * 1000;
+        }
         
         // 安全性評価
         double safety_margin = compute_safety_margin(robot_state, obstacles);

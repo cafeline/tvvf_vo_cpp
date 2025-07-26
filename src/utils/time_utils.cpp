@@ -5,6 +5,8 @@
 #include <map>
 #include <algorithm>
 #include <numeric>
+#include <thread>
+#include <mutex>
 
 namespace tvvf_vo_c {
 namespace time_utils {
@@ -220,6 +222,144 @@ ScopedTimer::~ScopedTimer() {
 }
 
 double ScopedTimer::elapsed_ms() const {
+    return timer_.elapsed() * 1000.0;
+}
+
+// ModuleProfiler class implementation
+ModuleProfiler::ModuleProfiler() {}
+
+void ModuleProfiler::begin_module(const std::string& module_name) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    auto& measurement = active_measurements_[module_name];
+    measurement.start_time = Clock::now();
+    measurement.is_active = true;
+}
+
+double ModuleProfiler::end_module(const std::string& module_name) {
+    auto end_time = Clock::now();
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    auto it = active_measurements_.find(module_name);
+    if (it == active_measurements_.end() || !it->second.is_active) {
+        return 0.0;
+    }
+    
+    double duration_ms = get_elapsed_time(it->second.start_time, end_time) * 1000.0;
+    it->second.is_active = false;
+    
+    update_stats(module_name, duration_ms);
+    
+    return duration_ms;
+}
+
+void ModuleProfiler::update_stats(const std::string& module_name, double duration_ms) {
+    auto& stats = module_stats_[module_name];
+    
+    auto now = Clock::now();
+    
+    if (stats.call_count > 0) {
+        double time_since_last = get_elapsed_time(stats.last_call_time, now);
+        if (time_since_last > 0) {
+            stats.frequency_hz = 1.0 / time_since_last;
+        }
+    }
+    
+    stats.total_time_ms += duration_ms;
+    stats.call_count++;
+    stats.min_time_ms = std::min(stats.min_time_ms, duration_ms);
+    stats.max_time_ms = std::max(stats.max_time_ms, duration_ms);
+    stats.avg_time_ms = stats.total_time_ms / stats.call_count;
+    stats.last_call_time = now;
+}
+
+std::map<std::string, ModuleProfiler::ModuleStats> ModuleProfiler::get_all_stats() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return module_stats_;
+}
+
+ModuleProfiler::ModuleStats ModuleProfiler::get_module_stats(const std::string& module_name) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    auto it = module_stats_.find(module_name);
+    if (it != module_stats_.end()) {
+        return it->second;
+    }
+    
+    return ModuleStats{};
+}
+
+std::string ModuleProfiler::format_performance_summary(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    std::ostringstream oss;
+    oss << "========================================\n";
+    oss << "           PERFORMANCE SUMMARY          \n";
+    oss << "========================================\n";
+    oss << std::left << std::setw(20) << "Module"
+        << std::right << std::setw(8) << "Calls"
+        << std::setw(10) << "Avg(ms)"
+        << std::setw(10) << "Min(ms)"
+        << std::setw(10) << "Max(ms)"
+        << std::setw(10) << "Total(ms)"
+        << std::setw(8) << "Freq(Hz)" << "\n";
+    oss << "----------------------------------------\n";
+    
+    std::vector<std::pair<std::string, ModuleStats>> sorted_stats(module_stats_.begin(), module_stats_.end());
+    
+    std::sort(sorted_stats.begin(), sorted_stats.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second.avg_time_ms > b.second.avg_time_ms;
+              });
+    
+    size_t count = 0;
+    for (const auto& [name, stats] : sorted_stats) {
+        if (stats.call_count == 0) continue;
+        if (top_n > 0 && count >= top_n) break;
+        
+        oss << std::left << std::setw(20) << name
+            << std::right << std::setw(8) << stats.call_count
+            << std::setw(10) << std::fixed << std::setprecision(3) << stats.avg_time_ms
+            << std::setw(10) << std::fixed << std::setprecision(3) << stats.min_time_ms
+            << std::setw(10) << std::fixed << std::setprecision(3) << stats.max_time_ms
+            << std::setw(10) << std::fixed << std::setprecision(1) << stats.total_time_ms
+            << std::setw(8) << std::fixed << std::setprecision(1) << stats.frequency_hz << "\n";
+        
+        count++;
+    }
+    
+    oss << "========================================\n";
+    
+    double total_computation_time = 0.0;
+    for (const auto& [name, stats] : module_stats_) {
+        total_computation_time += stats.total_time_ms;
+    }
+    
+    oss << "Total computation time: " << std::fixed << std::setprecision(1) 
+        << total_computation_time << " ms\n";
+    oss << "Number of modules: " << module_stats_.size() << "\n";
+    
+    return oss.str();
+}
+
+void ModuleProfiler::reset_stats() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    module_stats_.clear();
+    active_measurements_.clear();
+}
+
+// ScopedModuleProfiler class implementation
+ScopedModuleProfiler::ScopedModuleProfiler(ModuleProfiler& profiler, const std::string& module_name)
+    : profiler_(profiler), module_name_(module_name) {
+    profiler_.begin_module(module_name_);
+    timer_.start();
+}
+
+ScopedModuleProfiler::~ScopedModuleProfiler() {
+    profiler_.end_module(module_name_);
+}
+
+double ScopedModuleProfiler::elapsed_ms() const {
     return timer_.elapsed() * 1000.0;
 }
 
