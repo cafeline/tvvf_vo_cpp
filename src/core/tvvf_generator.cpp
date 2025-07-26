@@ -24,12 +24,10 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
     // 2. 斥力場計算（時間依存・従来通り）
     auto repulsive_force = compute_repulsive_force(position, time, obstacles);
     
-    // 3. 時間依存補正項
-    auto time_correction = compute_time_correction(position, time, obstacles, goal);
-    
-    // 4. スタック回避のための適応的合成
+    // 3. スタック回避のための適応的合成（時間補正なし）
+    std::array<double, 2> zero_time_correction = {0.0, 0.0};
     std::array<double, 2> total_force = adaptive_force_composition(
-        position, path_force, goal_force, repulsive_force, time_correction, obstacles);
+        position, path_force, goal_force, repulsive_force, zero_time_correction, obstacles);
     
     // 5. 数値安定性とクリッピング
     total_force = clip_magnitude(total_force, config_.max_force);
@@ -83,9 +81,7 @@ std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Po
         return {0.0, 0.0};
     }
     
-    double min_distance_time = compute_minimum_distance_time(position, obstacle, config_.time_horizon);
-    double time_weight = compute_time_dependent_weight(min_distance_time, current_distance, obstacle);
-    
+    // 予測機能を削除：現在位置での静的な斥力のみ計算
     std::array<double, 2> force_direction;
     double force_magnitude;
     
@@ -105,8 +101,9 @@ std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Po
         force_direction = safe_normalize(current_relative_pos);
     }
     
-    return {force_magnitude * time_weight * force_direction[0],
-            force_magnitude * time_weight * force_direction[1]};
+    // 時間依存の重み付けを削除：単純な斥力のみ
+    return {force_magnitude * force_direction[0],
+            force_magnitude * force_direction[1]};
 }
 
 double TVVFGenerator::compute_minimum_distance_time(const Position& position,
@@ -350,7 +347,7 @@ std::array<double, 2> TVVFGenerator::adaptive_force_composition(const Position& 
                                                               const std::array<double, 2>& path_force,
                                                               const std::array<double, 2>& goal_force,
                                                               const std::array<double, 2>& repulsive_force,
-                                                              const std::array<double, 2>& time_correction,
+                                                              const std::array<double, 2>& /* time_correction */,
                                                               const std::vector<DynamicObstacle>& obstacles) const {
     
     // ============== 新しい方向ベース階層合成手法 ==============
@@ -427,9 +424,7 @@ std::array<double, 2> TVVFGenerator::adaptive_force_composition(const Position& 
                       path_weight * path_force[1] + goal_weight * goal_force[1]};
     }
     
-    // 6. 時間補正の軽微な追加
-    result_force[0] += 0.1 * time_correction[0];
-    result_force[1] += 0.1 * time_correction[1];
+    // 時間補正は削除済み
     
     // 7. 最終的な安全チェックと制限
     double final_magnitude = std::sqrt(result_force[0] * result_force[0] + result_force[1] * result_force[1]);
