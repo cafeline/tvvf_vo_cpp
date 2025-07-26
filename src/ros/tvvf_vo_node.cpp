@@ -39,9 +39,6 @@ TVVFVONode::TVVFVONode() : Node("tvvf_vo_c_node") {
     clicked_point_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
         "clicked_point", 10, std::bind(&TVVFVONode::clicked_point_callback, this, std::placeholders::_1));
 
-    laser_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-        "scan", 10, std::bind(&TVVFVONode::laser_callback, this, std::placeholders::_1));
-
     // タイマー初期化（制御ループ：20Hz）
     control_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50), std::bind(&TVVFVONode::control_loop, this));
@@ -79,7 +76,6 @@ void TVVFVONode::setup_parameters() {
     // フレーム名
     this->declare_parameter("base_frame", "base_footprint");
     this->declare_parameter("global_frame", "map");
-    this->declare_parameter("laser_frame", "lidar_link");
 
     // 制御関連
     this->declare_parameter("goal_tolerance", 0.1);
@@ -186,13 +182,6 @@ void TVVFVONode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
     }
 }
 
-void TVVFVONode::laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-    try {
-        obstacles_ = detect_obstacles_from_laser(msg);
-    } catch (const std::exception& e) {
-        RCLCPP_ERROR(this->get_logger(), "Laser callback error: %s", e.what());
-    }
-}
 
 void TVVFVONode::plan_path_to_goal() {
     try {
@@ -222,77 +211,6 @@ void TVVFVONode::plan_path_to_goal() {
     }
 }
 
-std::vector<DynamicObstacle> TVVFVONode::detect_obstacles_from_laser(
-    const sensor_msgs::msg::LaserScan::SharedPtr laser_msg) {
-    
-    std::vector<DynamicObstacle> obstacles;
-
-    // 個別点による障害物検出
-    double min_distance = 0.5;  // 最小検出距離
-    double max_distance = config_.influence_radius;
-    double default_radius = 0.1;  // 個別点の標準半径
-
-    std::string laser_frame = laser_msg->header.frame_id;
-    std::string global_frame = this->get_parameter("global_frame").as_string();
-
-    // レーザーフレーム名のデバッグ出力
-    static int frame_debug_counter = 0;
-    if (++frame_debug_counter % 50 == 0) {
-        RCLCPP_INFO(this->get_logger(), "Laser frame_id: '%s', Global frame: '%s'", 
-                    laser_frame.c_str(), global_frame.c_str());
-    }
-
-    // フレーム名が空の場合はデフォルト値を使用
-    if (laser_frame.empty()) {
-        laser_frame = this->get_parameter("laser_frame").as_string();
-        RCLCPP_WARN(this->get_logger(), "Empty laser frame_id detected, using parameter: '%s'", 
-                    laser_frame.c_str());
-    }
-
-    try {
-        // TF変換の準備
-        geometry_msgs::msg::TransformStamped transform_stamped;
-        transform_stamped = tf_buffer_->lookupTransform(
-            global_frame, laser_frame, laser_msg->header.stamp, tf2::durationFromSec(0.1));
-
-        int valid_count = 0;
-        for (size_t i = 0; i < laser_msg->ranges.size(); ++i) {
-            double distance = laser_msg->ranges[i];
-            
-            if (distance > min_distance && distance < max_distance && 
-                std::isfinite(distance)) {
-                
-                double angle = laser_msg->angle_min + i * laser_msg->angle_increment;
-
-                // レーザーフレームでの障害物位置
-                geometry_msgs::msg::PointStamped laser_point;
-                laser_point.header.frame_id = laser_frame;
-                laser_point.header.stamp = laser_msg->header.stamp;
-                laser_point.point.x = distance * std::cos(angle);
-                laser_point.point.y = distance * std::sin(angle);
-                laser_point.point.z = 0.0;
-
-                // グローバルフレームに変換
-                geometry_msgs::msg::PointStamped global_point;
-                tf2::doTransform(laser_point, global_point, transform_stamped);
-
-                // 個別点を直接障害物として追加
-                obstacles.emplace_back(
-                    valid_count,
-                    Position(global_point.point.x, global_point.point.y),
-                    Velocity(0.0, 0.0),  // 静的障害物として扱う
-                    default_radius
-                );
-                valid_count++;
-            }
-        }
-
-    } catch (const tf2::TransformException& ex) {
-        RCLCPP_WARN(this->get_logger(), "TF lookup failed for laser: %s", ex.what());
-    }
-
-    return obstacles;
-}
 
 void TVVFVONode::control_loop() {
     double loop_start_time = time_utils::get_current_time();
@@ -325,10 +243,11 @@ void TVVFVONode::control_loop() {
             return;
         }
 
-        // TVVF-VO制御更新
+        // TVVF-VO制御更新（障害物なしで実行）
+        std::vector<DynamicObstacle> empty_obstacles;
         double control_start_time = time_utils::get_current_time();
         auto control_output = controller_->update(
-            robot_state_.value(), obstacles_, goal_.value(), planned_path_);
+            robot_state_.value(), empty_obstacles, goal_.value(), planned_path_);
         double control_time = (time_utils::get_current_time() - control_start_time) * 1000;  // ms
 
         // 制御コマンド発行

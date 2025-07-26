@@ -4,7 +4,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
-#include <sensor_msgs/msg/laser_scan.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <tf2_ros/buffer.h>
@@ -42,7 +41,6 @@ private:
     // 状態変数
     std::optional<RobotState> robot_state_;
     std::optional<Goal> goal_;
-    std::vector<DynamicObstacle> obstacles_;
     std::optional<nav_msgs::msg::OccupancyGrid> occupancy_grid_;
     std::optional<Path> planned_path_;
     
@@ -64,7 +62,6 @@ private:
     // サブスクライバー
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
 
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
@@ -102,23 +99,9 @@ private:
     void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
 
     /**
-     * @brief レーザースキャンコールバック
-     * @param msg LaserScanメッセージ
-     */
-    void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
-
-    /**
      * @brief 現在位置からゴールまでの経路を計画
      */
     void plan_path_to_goal();
-
-    /**
-     * @brief レーザースキャンから障害物検出（個別点処理版）
-     * @param laser_msg レーザースキャンメッセージ
-     * @return 検出された障害物リスト
-     */
-    std::vector<DynamicObstacle> detect_obstacles_from_laser(
-        const sensor_msgs::msg::LaserScan::SharedPtr laser_msg);
 
     /**
      * @brief メイン制御ループ
