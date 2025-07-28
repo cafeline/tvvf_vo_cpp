@@ -26,9 +26,9 @@ public:
      * @param time_horizon 時間ホライズン
      * @return VO錐体のリスト
      */
-    std::vector<VOCone> compute_vo_set(const RobotState& robot_state,
-                                      const std::vector<DynamicObstacle>& obstacles,
-                                      double time_horizon);
+    std::vector<VOCone> compute_vo_set(const RobotState&,
+                                      const std::vector<DynamicObstacle>&,
+                                      double);
 
     /**
      * @brief 指定速度がVO錐体内にあるかチェック

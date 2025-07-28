@@ -9,7 +9,7 @@ FeasibleVelocitySelector::FeasibleVelocitySelector(const TVVFVOConfig& config)
     : config_(config), vo_calc_(config) {}
 
 Velocity FeasibleVelocitySelector::select_feasible_velocity(const std::array<double, 2>& tvvf_vector,
-                                                           const std::vector<VOCone>& vo_cones,
+                                                           const std::vector<VOCone>&,
                                                            const RobotState& robot_state) {
     // VO制約を無視してTVVFベクトルを直接使用（最大速度制限のみ適用）
     double tvvf_magnitude = vector_magnitude(tvvf_vector);

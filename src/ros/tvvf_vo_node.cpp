@@ -104,7 +104,6 @@ namespace tvvf_vo_c
     this->declare_parameter("vector_scale_factor", 0.3);
     this->declare_parameter("max_vector_points", 500);
     this->declare_parameter("min_vector_magnitude", 0.05);
-    this->declare_parameter("viz_update_rate", 5.0);
   }
 
   TVVFVOConfig TVVFVONode::create_config_from_parameters()
@@ -311,7 +310,6 @@ namespace tvvf_vo_c
   void TVVFVONode::control_loop()
   {
     PROFILE_MODULE(profiler_, "ControlLoop_Total");
-    double loop_start_time = time_utils::get_current_time();
 
     try
     {

@@ -27,7 +27,7 @@ public:
      * @return 選択された実行可能速度
      */
     Velocity select_feasible_velocity(const std::array<double, 2>& tvvf_vector,
-                                     const std::vector<VOCone>& vo_cones,
+                                     const std::vector<VOCone>&,
                                      const RobotState& robot_state);
 
 private:

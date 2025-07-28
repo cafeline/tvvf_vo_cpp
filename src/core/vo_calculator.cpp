@@ -7,9 +7,9 @@ namespace tvvf_vo_c {
 
 VelocityObstacleCalculator::VelocityObstacleCalculator(const TVVFVOConfig& config) : config_(config) {}
 
-std::vector<VOCone> VelocityObstacleCalculator::compute_vo_set(const RobotState& robot_state,
-                                                              const std::vector<DynamicObstacle>& obstacles,
-                                                              double time_horizon) {
+std::vector<VOCone> VelocityObstacleCalculator::compute_vo_set(const RobotState&,
+                                                              const std::vector<DynamicObstacle>&,
+                                                              double) {
     // VO計算を簡略化：空のリストを返す
     return std::vector<VOCone>();
 }
