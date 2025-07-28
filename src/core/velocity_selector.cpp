@@ -11,15 +11,19 @@ FeasibleVelocitySelector::FeasibleVelocitySelector(const TVVFVOConfig& config)
 Velocity FeasibleVelocitySelector::select_feasible_velocity(const std::array<double, 2>& tvvf_vector,
                                                            const std::vector<VOCone>& vo_cones,
                                                            const RobotState& robot_state) {
-    auto candidate_velocities = generate_candidate_velocities(tvvf_vector, vo_cones, robot_state);
+    // VO制約を無視してTVVFベクトルを直接使用（最大速度制限のみ適用）
+    double tvvf_magnitude = vector_magnitude(tvvf_vector);
     
-    if (candidate_velocities.empty()) {
+    if (tvvf_magnitude < 1e-8) {
         return Velocity(0.0, 0.0);
     }
     
-    auto best_velocity = select_optimal_velocity(candidate_velocities, tvvf_vector, vo_cones, robot_state);
+    // 最大速度制限を適用
+    double limited_magnitude = std::min(tvvf_magnitude, robot_state.max_velocity);
+    auto normalized_tvvf = normalize_vector(tvvf_vector);
     
-    return Velocity(best_velocity[0], best_velocity[1]);
+    return Velocity(normalized_tvvf[0] * limited_magnitude, 
+                   normalized_tvvf[1] * limited_magnitude);
 }
 
 std::vector<std::array<double, 2>> FeasibleVelocitySelector::generate_candidate_velocities(
