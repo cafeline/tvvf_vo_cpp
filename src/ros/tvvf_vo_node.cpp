@@ -375,9 +375,8 @@ namespace tvvf_vo_c
         publish_visualization();
       }
 
-      // ベクトル場可視化（独立したフラグで制御、10回に1回のみ実行で高速化）
-      static int viz_counter = 0;
-      if (this->get_parameter("enable_vector_field_viz").as_bool() && ++viz_counter % 10 == 0)
+      // ベクトル場可視化（毎フレーム実行でチカチカを防止）
+      if (this->get_parameter("enable_vector_field_viz").as_bool())
       {
         PROFILE_MODULE(profiler_, "VectorField_Viz");
         publish_vector_field_visualization();
@@ -519,6 +518,7 @@ namespace tvvf_vo_c
           target_marker.color.g = 1.0;
           target_marker.color.b = 0.0;
           target_marker.color.a = 0.7;
+          target_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
           marker_array.markers.push_back(target_marker);
         }
@@ -571,6 +571,7 @@ namespace tvvf_vo_c
       line_marker.color.g = 0.0;
       line_marker.color.b = 0.0;
       line_marker.color.a = 0.6; // 透明度
+      line_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
       marker_array.markers.push_back(line_marker);
 
@@ -620,7 +621,8 @@ namespace tvvf_vo_c
           point_marker.color.b = 0.0;
           point_marker.color.a = 0.8;
         }
-
+        
+        point_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
         marker_array.markers.push_back(point_marker);
       }
       path_pub_->publish(marker_array);
@@ -730,6 +732,14 @@ namespace tvvf_vo_c
       {
         auto marker_array = visualization_msgs::msg::MarkerArray();
         std::string global_frame = this->get_parameter("global_frame").as_string();
+        
+        // 最初に既存マーカーをクリア
+        auto delete_marker = visualization_msgs::msg::Marker();
+        delete_marker.header.frame_id = global_frame;
+        delete_marker.header.stamp = this->get_clock()->now();
+        delete_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+        delete_marker.id = 0;
+        marker_array.markers.push_back(delete_marker);
 
         for (size_t i = 0; i < grid_positions.size(); ++i)
         {
@@ -771,10 +781,8 @@ namespace tvvf_vo_c
           arrow_marker.color.b = 0.0;
           arrow_marker.color.a = 0.8;
 
-          // 生存時間（更新レートに基づいて設定）
-          double update_rate = this->get_parameter("viz_update_rate").as_double();
-          double lifetime = std::max(0.1, 2.0 / update_rate); // 更新間隔の2倍
-          arrow_marker.lifetime = rclcpp::Duration::from_seconds(lifetime);
+          // 生存時間（無限に設定）
+          arrow_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
           marker_array.markers.push_back(arrow_marker);
         }
@@ -809,6 +817,7 @@ namespace tvvf_vo_c
     marker.color.g = 1.0;
     marker.color.b = 0.0;
     marker.color.a = 0.8;
+    marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
     return marker;
   }

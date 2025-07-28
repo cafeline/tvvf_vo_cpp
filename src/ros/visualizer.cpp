@@ -42,6 +42,7 @@ visualization_msgs::msg::MarkerArray TVVFVOVisualizer::create_vector_field_marke
         }
 
         auto arrow_marker = create_arrow_marker(start, end, color, marker_id + i, 0.03);
+        arrow_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
         marker_array.markers.push_back(arrow_marker);
     }
 
@@ -67,6 +68,7 @@ visualization_msgs::msg::MarkerArray TVVFVOVisualizer::create_obstacle_markers(
 
         auto cylinder_marker = create_cylinder_marker(
             obstacle.position, obstacle.radius, 0.2, color, marker_id + i);
+        cylinder_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
         marker_array.markers.push_back(cylinder_marker);
 
         // 動的障害物の速度ベクトル
@@ -80,6 +82,7 @@ visualization_msgs::msg::MarkerArray TVVFVOVisualizer::create_obstacle_markers(
             auto velocity_arrow = create_arrow_marker(
                 start, end, create_color(0.0, 0.0, 1.0, 0.8), 
                 marker_id + obstacles.size() + i, 0.02);
+            velocity_arrow.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
             marker_array.markers.push_back(velocity_arrow);
         }
     }
@@ -124,6 +127,7 @@ visualization_msgs::msg::MarkerArray TVVFVOVisualizer::create_vo_cone_markers(
                 cone_marker.points.push_back(p2);
             }
             
+            cone_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
             marker_array.markers.push_back(cone_marker);
         }
     }
@@ -151,6 +155,7 @@ visualization_msgs::msg::MarkerArray TVVFVOVisualizer::create_path_markers(
     std_msgs::msg::ColorRGBA path_color = create_color(0.0, 0.8, 1.0, 0.9);  // シアン
     auto path_marker = create_line_marker(path_positions, path_color, marker_id, 0.05);
     path_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    path_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
     marker_array.markers.push_back(path_marker);
 
     // 経路点の球マーカー
@@ -171,6 +176,7 @@ visualization_msgs::msg::MarkerArray TVVFVOVisualizer::create_path_markers(
         point_marker.scale.z = 0.08;
 
         point_marker.color = create_color(0.0, 1.0, 1.0, 0.8);
+        point_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
         marker_array.markers.push_back(point_marker);
     }
@@ -198,6 +204,7 @@ visualization_msgs::msg::Marker TVVFVOVisualizer::create_goal_marker(
     marker.scale.z = 0.05;
 
     marker.color = create_color(0.0, 1.0, 0.0, 0.6);  // 緑
+    marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
     return marker;
 }
@@ -223,6 +230,7 @@ visualization_msgs::msg::Marker TVVFVOVisualizer::create_trajectory_marker(
 
     marker.scale.x = 0.02;  // 線の太さ
     marker.color = create_color(0.5, 0.0, 0.5, 0.8);  // 紫
+    marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
     return marker;
 }
@@ -279,6 +287,7 @@ visualization_msgs::msg::Marker TVVFVOVisualizer::create_arrow_marker(
     marker.scale.z = scale * 2;  // 矢印の高さ
 
     marker.color = color;
+    marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
     return marker;
 }
@@ -306,6 +315,7 @@ visualization_msgs::msg::Marker TVVFVOVisualizer::create_cylinder_marker(
     marker.scale.z = height;
 
     marker.color = color;
+    marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
     return marker;
 }
@@ -333,6 +343,7 @@ visualization_msgs::msg::Marker TVVFVOVisualizer::create_line_marker(
 
     marker.scale.x = line_width;
     marker.color = color;
+    marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
 
     return marker;
 }
