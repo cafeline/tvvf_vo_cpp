@@ -249,6 +249,26 @@ private:
     std::array<double, 2> compute_fluid_avoidance_vector(const Position& position, 
                                                         const DynamicObstacle& obstacle,
                                                         const std::array<double, 2>& goal_direction) const;
+
+    /**
+     * @brief 従来の放射状斥力計算
+     * @param position 現在位置
+     * @param obstacle 障害物
+     * @return 斥力ベクトル
+     */
+    std::array<double, 2> compute_radial_repulsive_force(const Position& position,
+                                                        const DynamicObstacle& obstacle) const;
+
+    /**
+     * @brief 斥力と流体ベクトル場の統合計算
+     * @param position 現在位置
+     * @param obstacle 障害物
+     * @param goal_direction ゴール方向（正規化済み）
+     * @return 統合された回避ベクトル
+     */
+    std::array<double, 2> compute_combined_avoidance_vector(const Position& position,
+                                                           const DynamicObstacle& obstacle,
+                                                           const std::array<double, 2>& goal_direction) const;
 };
 
 } // namespace tvvf_vo_c

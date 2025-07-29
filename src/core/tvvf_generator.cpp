@@ -25,12 +25,12 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
     std::array<double, 2> goal_direction = {goal.position.x - position.x, goal.position.y - position.y};
     goal_direction = safe_normalize_with_default(goal_direction, 1e-8, {1.0, 0.0});
     
-    // 3. 水が流れるような滑らかな斥力場計算
+    // 3. 斥力と流体ベクトル場を統合した障害物回避力計算
     std::array<double, 2> repulsive_force = {0.0, 0.0};
     for (const auto& obstacle : obstacles) {
-        auto fluid_vector = compute_fluid_avoidance_vector(position, obstacle, goal_direction);
-        repulsive_force[0] += fluid_vector[0];
-        repulsive_force[1] += fluid_vector[1];
+        auto combined_vector = compute_combined_avoidance_vector(position, obstacle, goal_direction);
+        repulsive_force[0] += combined_vector[0];
+        repulsive_force[1] += combined_vector[1];
     }
     
     // 4. スタック回避のための適応的合成（時間補正なし）
@@ -723,6 +723,94 @@ std::array<double, 2> TVVFGenerator::compute_fluid_avoidance_vector(const Positi
     };
     
     return fluid_vector;
+}
+
+std::array<double, 2> TVVFGenerator::compute_radial_repulsive_force(const Position& position,
+                                                                   const DynamicObstacle& obstacle) const {
+    // 障害物への相対位置ベクトル（ロボットから障害物へ）
+    std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
+                                        obstacle.position.y - position.y};
+    double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
+    
+    // 影響圏外の場合はゼロベクトル
+    if (distance > config_.influence_radius) {
+        return {0.0, 0.0};
+    }
+    
+    // 安全距離（障害物半径 + 安全マージン）
+    double safe_distance = obstacle.radius + config_.safety_margin;
+    
+    // 極近距離での緊急回避
+    if (distance < config_.min_distance) {
+        std::array<double, 2> escape_direction = safe_normalize_with_default(
+            {position.x - obstacle.position.x, position.y - obstacle.position.y}, 
+            1e-8, {1.0, 0.0});
+        return {config_.k_repulsion * 20.0 * escape_direction[0],
+                config_.k_repulsion * 20.0 * escape_direction[1]};
+    }
+    
+    // 障害物から離れる方向（放射状斥力）
+    std::array<double, 2> repulsive_direction = safe_normalize(
+        {position.x - obstacle.position.x, position.y - obstacle.position.y});
+    
+    // 距離に基づく斥力強度計算
+    double force_magnitude;
+    if (distance <= safe_distance) {
+        // 安全距離内：強い斥力
+        force_magnitude = config_.k_repulsion * (safe_distance / distance - 1.0) * 2.0;
+    } else if (distance <= safe_distance * 2.0) {
+        // 中間距離：中程度の斥力
+        double normalized_dist = (distance - safe_distance) / safe_distance;
+        force_magnitude = config_.k_repulsion * (1.0 - normalized_dist);
+    } else {
+        // 外側：弱い斥力
+        double normalized_dist = (distance - safe_distance * 2.0) / (config_.influence_radius - safe_distance * 2.0);
+        force_magnitude = config_.k_repulsion * 0.3 * std::exp(-normalized_dist * 2.0);
+    }
+    
+    return {force_magnitude * repulsive_direction[0],
+            force_magnitude * repulsive_direction[1]};
+}
+
+std::array<double, 2> TVVFGenerator::compute_combined_avoidance_vector(const Position& position,
+                                                                      const DynamicObstacle& obstacle,
+                                                                      const std::array<double, 2>& goal_direction) const {
+    // 1. 放射状斥力を計算
+    auto repulsive_vector = compute_radial_repulsive_force(position, obstacle);
+    
+    // 2. 流体ベクトル場を計算
+    auto fluid_vector = compute_fluid_avoidance_vector(position, obstacle, goal_direction);
+    
+    // 3. 距離に基づく重み調整
+    std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
+                                        obstacle.position.y - position.y};
+    double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
+    double safe_distance = obstacle.radius + config_.safety_margin;
+    
+    // 距離に応じて斥力と流体の重みを動的に調整
+    double repulsive_weight, fluid_weight;
+    if (distance <= safe_distance) {
+        // 近距離：斥力を強化
+        repulsive_weight = 0.8;
+        fluid_weight = 0.2;
+    } else if (distance <= safe_distance * 2.0) {
+        // 中距離：バランス調整
+        double blend_factor = (distance - safe_distance) / safe_distance;
+        repulsive_weight = 0.8 - 0.4 * blend_factor;  // 0.8 -> 0.4
+        fluid_weight = 0.2 + 0.4 * blend_factor;      // 0.2 -> 0.6
+    } else {
+        // 遠距離：流体を強化
+        repulsive_weight = config_.repulsive_weight;
+        fluid_weight = config_.fluid_weight;
+    }
+    
+    // 4. 重み付き合成
+    std::array<double, 2> combined_vector = {
+        repulsive_weight * repulsive_vector[0] + fluid_weight * fluid_vector[0],
+        repulsive_weight * repulsive_vector[1] + fluid_weight * fluid_vector[1]
+    };
+    
+    return combined_vector;
 }
 
 } // namespace tvvf_vo_c

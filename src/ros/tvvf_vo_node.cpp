@@ -83,6 +83,8 @@ namespace tvvf_vo_c
     // 流体ベクトル場専用パラメータ
     this->declare_parameter("fluid_influence_radius", 1.5);
     this->declare_parameter("fluid_strength_factor", 1.0);
+    this->declare_parameter("repulsive_weight", 0.4);
+    this->declare_parameter("fluid_weight", 0.6);
 
     // ロボット仕様パラメータ
     this->declare_parameter("max_linear_velocity", 2.0);
@@ -126,6 +128,8 @@ namespace tvvf_vo_c
     config.vo_resolution = this->get_parameter("vo_resolution").as_double();
     config.fluid_influence_radius = this->get_parameter("fluid_influence_radius").as_double();
     config.fluid_strength_factor = this->get_parameter("fluid_strength_factor").as_double();
+    config.repulsive_weight = this->get_parameter("repulsive_weight").as_double();
+    config.fluid_weight = this->get_parameter("fluid_weight").as_double();
     config.max_computation_time = this->get_parameter("max_computation_time").as_double();
 
     return config;
