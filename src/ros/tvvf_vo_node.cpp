@@ -79,6 +79,10 @@ namespace tvvf_vo_c
     this->declare_parameter("time_horizon", 3.0);
     this->declare_parameter("safety_margin", 0.2);
     this->declare_parameter("vo_resolution", 0.1);
+    
+    // 流体ベクトル場専用パラメータ
+    this->declare_parameter("fluid_influence_radius", 1.5);
+    this->declare_parameter("fluid_strength_factor", 1.0);
 
     // ロボット仕様パラメータ
     this->declare_parameter("max_linear_velocity", 2.0);
@@ -120,6 +124,8 @@ namespace tvvf_vo_c
     config.time_horizon = this->get_parameter("time_horizon").as_double();
     config.safety_margin = this->get_parameter("safety_margin").as_double();
     config.vo_resolution = this->get_parameter("vo_resolution").as_double();
+    config.fluid_influence_radius = this->get_parameter("fluid_influence_radius").as_double();
+    config.fluid_strength_factor = this->get_parameter("fluid_strength_factor").as_double();
     config.max_computation_time = this->get_parameter("max_computation_time").as_double();
 
     return config;

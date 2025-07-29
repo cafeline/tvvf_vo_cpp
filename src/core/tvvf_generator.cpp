@@ -21,10 +21,19 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
     auto path_force = compute_path_following_force(position, planned_path.value());
     auto goal_force = compute_adaptive_goal_force(position, goal, planned_path.value());
     
-    // 2. 斥力場計算（時間依存・従来通り）
-    auto repulsive_force = compute_repulsive_force(position, time, obstacles);
+    // 2. ゴール方向の計算（滑らかな回避のため）
+    std::array<double, 2> goal_direction = {goal.position.x - position.x, goal.position.y - position.y};
+    goal_direction = safe_normalize_with_default(goal_direction, 1e-8, {1.0, 0.0});
     
-    // 3. スタック回避のための適応的合成（時間補正なし）
+    // 3. 水が流れるような滑らかな斥力場計算
+    std::array<double, 2> repulsive_force = {0.0, 0.0};
+    for (const auto& obstacle : obstacles) {
+        auto fluid_vector = compute_fluid_avoidance_vector(position, obstacle, goal_direction);
+        repulsive_force[0] += fluid_vector[0];
+        repulsive_force[1] += fluid_vector[1];
+    }
+    
+    // 4. スタック回避のための適応的合成（時間補正なし）
     std::array<double, 2> zero_time_correction = {0.0, 0.0};
     std::array<double, 2> total_force = adaptive_force_composition(
         position, path_force, goal_force, repulsive_force, zero_time_correction, obstacles);
@@ -58,6 +67,7 @@ std::array<double, 2> TVVFGenerator::compute_attractive_force(const Position& po
 
 std::array<double, 2> TVVFGenerator::compute_repulsive_force(const Position& position, double time,
                                                             const std::vector<DynamicObstacle>& obstacles) const {
+    // この関数は後方互換性のために残しておき、元の実装を保持
     std::array<double, 2> total_repulsive = {0.0, 0.0};
     
     for (const auto& obstacle : obstacles) {
@@ -634,6 +644,85 @@ std::array<double, 2> TVVFGenerator::compute_gentle_lateral_correction(const Pat
     } else {
         return {0.0, correction_magnitude};
     }
+}
+
+std::array<double, 2> TVVFGenerator::compute_fluid_avoidance_vector(const Position& position, 
+                                                                   const DynamicObstacle& obstacle,
+                                                                   const std::array<double, 2>& goal_direction) const {
+    // 障害物への相対位置ベクトル（ロボットから障害物へ）
+    std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
+                                        obstacle.position.y - position.y};
+    double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
+    
+    // 流体ベクトル場の影響圏外の場合はゼロベクトル
+    if (distance > config_.fluid_influence_radius) {
+        return {0.0, 0.0};
+    }
+    
+    // 安全距離（障害物半径 + 安全マージン）
+    double safe_distance = obstacle.radius + config_.safety_margin;
+    
+    // 極近距離での緊急回避
+    if (distance < config_.min_distance) {
+        std::array<double, 2> escape_direction = safe_normalize_with_default(
+            {position.x - obstacle.position.x, position.y - obstacle.position.y}, 
+            1e-8, {1.0, 0.0});
+        return {config_.k_repulsion * 10.0 * escape_direction[0],
+                config_.k_repulsion * 10.0 * escape_direction[1]};
+    }
+    
+    // 障害物への方向を正規化（要件：向きはロボットから障害物へ）
+    std::array<double, 2> obstacle_direction = safe_normalize(to_obstacle);
+    
+    // 水が流れるような滑らかなベクトル場の計算
+    // 障害物周りで渦のような流れを作る
+    
+    // 1. 接線成分：障害物の周りを流れるような成分
+    std::array<double, 2> tangent_vector = {-obstacle_direction[1], obstacle_direction[0]};
+    
+    // 2. ゴール方向との内積で流れの向きを決定
+    double goal_tangent_dot = goal_direction[0] * tangent_vector[0] + goal_direction[1] * tangent_vector[1];
+    if (goal_tangent_dot < 0) {
+        // ゴール方向と逆の場合は接線方向を反転
+        tangent_vector[0] = -tangent_vector[0];
+        tangent_vector[1] = -tangent_vector[1];
+    }
+    
+    // 3. 距離に基づく重み計算
+    double distance_factor;
+    if (distance <= safe_distance) {
+        // 安全距離内：強い流れ
+        distance_factor = 1.0;
+    } else if (distance <= safe_distance * 2.0) {
+        // 中間距離：中程度の流れ
+        double normalized_dist = (distance - safe_distance) / safe_distance;
+        distance_factor = 0.8 * (1.0 - normalized_dist);
+    } else {
+        // 外側：弱い流れ
+        double normalized_dist = (distance - safe_distance * 2.0) / (config_.fluid_influence_radius - safe_distance * 2.0);
+        distance_factor = 0.3 * std::exp(-normalized_dist * 2.0);
+    }
+    
+    // 4. 放射成分：障害物から離れる成分（弱い）
+    std::array<double, 2> radial_vector = {position.x - obstacle.position.x, 
+                                          position.y - obstacle.position.y};
+    std::array<double, 2> radial_direction = safe_normalize(radial_vector);
+    
+    // 5. 流体の特性を模擬：接線成分を主体とし、放射成分を補助的に使用
+    double tangent_weight = 0.8; // 接線成分の重み（流れの主成分）
+    double radial_weight = 0.2;   // 放射成分の重み（軽微な反発）
+    
+    // 6. 最終的な滑らかなベクトル場（流体強度係数を適用）
+    std::array<double, 2> fluid_vector = {
+        config_.k_repulsion * config_.fluid_strength_factor * distance_factor * (
+            tangent_weight * tangent_vector[0] + radial_weight * radial_direction[0]
+        ),
+        config_.k_repulsion * config_.fluid_strength_factor * distance_factor * (
+            tangent_weight * tangent_vector[1] + radial_weight * radial_direction[1]
+        )
+    };
+    
+    return fluid_vector;
 }
 
 } // namespace tvvf_vo_c

@@ -238,6 +238,17 @@ private:
      * @return 横方向復帰力ベクトル
      */
     std::array<double, 2> compute_gentle_lateral_correction(const PathProjection& projection) const;
+
+    /**
+     * @brief 水が流れるような滑らかな障害物回避ベクトル場計算
+     * @param position 現在位置
+     * @param obstacle 障害物
+     * @param goal_direction ゴール方向（正規化済み）
+     * @return 滑らかな回避ベクトル
+     */
+    std::array<double, 2> compute_fluid_avoidance_vector(const Position& position, 
+                                                        const DynamicObstacle& obstacle,
+                                                        const std::array<double, 2>& goal_direction) const;
 };
 
 } // namespace tvvf_vo_c

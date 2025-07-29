@@ -176,6 +176,10 @@ struct TVVFVOConfig {
     double safety_margin;
     double vo_resolution;
     
+    // 流体ベクトル場専用パラメータ
+    double fluid_influence_radius;    // 水が流れるようなベクトル場の影響範囲 [m]
+    double fluid_strength_factor;     // 流体効果の強度調整係数
+    
     // 予測関連
     double prediction_dt;
     double uncertainty_growth;
@@ -196,7 +200,8 @@ struct TVVFVOConfig {
         : k_attraction(1.0), k_repulsion(2.0), influence_radius(3.0),
           k_path_attraction(2.0), path_influence_radius(2.0), lookahead_distance(1.5),
           path_smoothing_factor(0.8), time_horizon(3.0), safety_margin(0.2),
-          vo_resolution(0.1), prediction_dt(0.1), uncertainty_growth(0.1),
+          vo_resolution(0.1), fluid_influence_radius(1.5), fluid_strength_factor(1.0),
+          prediction_dt(0.1), uncertainty_growth(0.1),
           direction_weight(1.0), safety_weight(2.0), efficiency_weight(0.5),
           min_distance(1e-6), max_force(10.0), max_computation_time(0.05) {}
 };
