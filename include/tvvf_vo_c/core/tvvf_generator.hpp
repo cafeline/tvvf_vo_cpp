@@ -269,6 +269,28 @@ private:
     std::array<double, 2> compute_combined_avoidance_vector(const Position& position,
                                                            const DynamicObstacle& obstacle,
                                                            const std::array<double, 2>& goal_direction) const;
+
+    /**
+     * @brief 現在位置から経路の先読み方向を計算
+     * @param position 現在位置
+     * @param planned_path 計画された経路
+     * @return 先読み方向ベクトル（正規化済み）
+     */
+    std::array<double, 2> compute_path_lookahead_direction(const Position& position,
+                                                          const Path& planned_path) const;
+
+    /**
+     * @brief 経路方向統合型の障害物回避ベクトル計算
+     * @param position 現在位置
+     * @param obstacle 障害物
+     * @param path_direction 経路の先読み方向
+     * @param planned_path 計画された経路
+     * @return 経路を考慮した統合回避ベクトル
+     */
+    std::array<double, 2> compute_path_integrated_avoidance_vector(const Position& position,
+                                                                  const DynamicObstacle& obstacle,
+                                                                  const std::array<double, 2>& path_direction,
+                                                                  const Path& planned_path) const;
 };
 
 } // namespace tvvf_vo_c

@@ -21,16 +21,15 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
     auto path_force = compute_path_following_force(position, planned_path.value());
     auto goal_force = compute_adaptive_goal_force(position, goal, planned_path.value());
     
-    // 2. ゴール方向の計算（滑らかな回避のため）
-    std::array<double, 2> goal_direction = {goal.position.x - position.x, goal.position.y - position.y};
-    goal_direction = safe_normalize_with_default(goal_direction, 1e-8, {1.0, 0.0});
+    // 2. 経路の先読み方向を計算
+    std::array<double, 2> path_direction = compute_path_lookahead_direction(position, planned_path.value());
     
-    // 3. 斥力と流体ベクトル場を統合した障害物回避力計算
+    // 3. 経路方向統合型の障害物回避力計算
     std::array<double, 2> repulsive_force = {0.0, 0.0};
     for (const auto& obstacle : obstacles) {
-        auto combined_vector = compute_combined_avoidance_vector(position, obstacle, goal_direction);
-        repulsive_force[0] += combined_vector[0];
-        repulsive_force[1] += combined_vector[1];
+        auto integrated_vector = compute_path_integrated_avoidance_vector(position, obstacle, path_direction, planned_path.value());
+        repulsive_force[0] += integrated_vector[0];
+        repulsive_force[1] += integrated_vector[1];
     }
     
     // 4. スタック回避のための適応的合成（時間補正なし）
@@ -811,6 +810,119 @@ std::array<double, 2> TVVFGenerator::compute_combined_avoidance_vector(const Pos
     };
     
     return combined_vector;
+}
+
+std::array<double, 2> TVVFGenerator::compute_path_lookahead_direction(const Position& position,
+                                                                     const Path& planned_path) const {
+    if (planned_path.empty()) {
+        return {1.0, 0.0}; // デフォルト方向
+    }
+    
+    // 1. 現在位置に最も近い経路点を見つける
+    size_t closest_idx = find_closest_path_point(position, planned_path);
+    
+    // 2. 先読み距離に基づいて目標点を見つける
+    double accumulated_distance = 0.0;
+    Position current_pos = position;
+    
+    // 最も近い点から先読み距離分前進
+    for (size_t i = closest_idx; i < planned_path.size() - 1; ++i) {
+        const Position& next_point = planned_path[i + 1].position;
+        double segment_distance = current_pos.distance_to(next_point);
+        
+        if (accumulated_distance + segment_distance >= config_.lookahead_distance) {
+            // 先読み距離に到達
+            double remaining_distance = config_.lookahead_distance - accumulated_distance;
+            double ratio = remaining_distance / segment_distance;
+            
+            Position target_point(
+                current_pos.x + ratio * (next_point.x - current_pos.x),
+                current_pos.y + ratio * (next_point.y - current_pos.y)
+            );
+            
+            std::array<double, 2> direction = {target_point.x - position.x, target_point.y - position.y};
+            return safe_normalize_with_default(direction, 1e-8, {1.0, 0.0});
+        }
+        
+        accumulated_distance += segment_distance;
+        current_pos = next_point;
+    }
+    
+    // 経路終端の場合は最終点への方向
+    const Position& final_point = planned_path[planned_path.size() - 1].position;
+    std::array<double, 2> direction = {final_point.x - position.x, final_point.y - position.y};
+    return safe_normalize_with_default(direction, 1e-8, {1.0, 0.0});
+}
+
+std::array<double, 2> TVVFGenerator::compute_path_integrated_avoidance_vector(const Position& position,
+                                                                             const DynamicObstacle& obstacle,
+                                                                             const std::array<double, 2>& path_direction,
+                                                                             const Path& planned_path) const {
+    // 1. 従来の放射状斥力を計算
+    auto repulsive_vector = compute_radial_repulsive_force(position, obstacle);
+    
+    // 2. 経路方向を考慮した流体ベクトル場を計算
+    auto fluid_vector = compute_fluid_avoidance_vector(position, obstacle, path_direction);
+    
+    // 3. 経路方向成分を計算（常に未到達の経路方向を向く）
+    double path_strength = config_.k_path_attraction * config_.path_direction_weight;
+    std::array<double, 2> path_component = {path_strength * path_direction[0],
+                                           path_strength * path_direction[1]};
+    
+    // 4. 距離に基づく重み調整
+    std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
+                                        obstacle.position.y - position.y};
+    double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
+    double safe_distance = obstacle.radius + config_.safety_margin;
+    
+    // 5. 距離に応じた統合重み計算
+    double repulsive_weight, fluid_weight, path_weight;
+    
+    if (distance <= safe_distance) {
+        // 近距離：安全優先（斥力中心）
+        repulsive_weight = config_.near_repulsive_weight;
+        fluid_weight = config_.near_fluid_weight;
+        path_weight = config_.near_path_weight;
+    } else if (distance <= safe_distance * 2.0) {
+        // 中距離：バランス調整
+        double blend_factor = (distance - safe_distance) / safe_distance;
+        repulsive_weight = config_.near_repulsive_weight - 
+                          (config_.near_repulsive_weight - config_.mid_repulsive_weight) * blend_factor;
+        fluid_weight = config_.near_fluid_weight + 
+                      (config_.mid_fluid_weight - config_.near_fluid_weight) * blend_factor;
+        path_weight = config_.near_path_weight + 
+                     (config_.mid_path_weight - config_.near_path_weight) * blend_factor;
+    } else {
+        // 遠距離：経路追従重視
+        repulsive_weight = config_.repulsive_weight * 0.3;  // 設定値をさらに減衰
+        fluid_weight = config_.fluid_weight * 0.5;          // 設定値を減衰
+        path_weight = 0.5; // 経路方向を強化
+    }
+    
+    // 6. 障害物との角度関係を考慮した追加調整
+    // 経路方向と障害物方向の角度を計算
+    std::array<double, 2> obstacle_direction = safe_normalize(to_obstacle);
+    double path_obstacle_dot = path_direction[0] * obstacle_direction[0] + 
+                              path_direction[1] * obstacle_direction[1];
+    
+    // 経路方向に障害物がある場合は回避を強化
+    if (path_obstacle_dot > 0.5) { // 経路前方に障害物
+        repulsive_weight *= 1.5;
+        fluid_weight *= 1.3;
+        path_weight *= 0.7; // 経路方向を一時的に弱める
+    }
+    
+    // 7. 重み付き統合
+    std::array<double, 2> integrated_vector = {
+        repulsive_weight * repulsive_vector[0] + 
+        fluid_weight * fluid_vector[0] + 
+        path_weight * path_component[0],
+        repulsive_weight * repulsive_vector[1] + 
+        fluid_weight * fluid_vector[1] + 
+        path_weight * path_component[1]
+    };
+    
+    return integrated_vector;
 }
 
 } // namespace tvvf_vo_c

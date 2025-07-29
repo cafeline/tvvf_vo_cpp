@@ -181,6 +181,15 @@ struct TVVFVOConfig {
     double fluid_strength_factor;     // 流体効果の強度調整係数
     double repulsive_weight;          // 斥力成分の重み
     double fluid_weight;              // 流体成分の重み
+    double path_direction_weight;     // 経路方向成分の重み
+    
+    // 距離別重み調整パラメータ
+    double near_repulsive_weight;     // 近距離での斥力重み
+    double near_fluid_weight;         // 近距離での流体重み
+    double near_path_weight;          // 近距離での経路重み
+    double mid_repulsive_weight;      // 中距離での斥力重み
+    double mid_fluid_weight;          // 中距離での流体重み
+    double mid_path_weight;           // 中距離での経路重み
     
     // 予測関連
     double prediction_dt;
@@ -203,7 +212,9 @@ struct TVVFVOConfig {
           k_path_attraction(2.0), path_influence_radius(2.0), lookahead_distance(1.5),
           path_smoothing_factor(0.8), time_horizon(3.0), safety_margin(0.2),
           vo_resolution(0.1), fluid_influence_radius(1.5), fluid_strength_factor(1.0),
-          repulsive_weight(0.4), fluid_weight(0.6),
+          repulsive_weight(0.4), fluid_weight(0.6), path_direction_weight(1.0),
+          near_repulsive_weight(0.7), near_fluid_weight(0.2), near_path_weight(0.1),
+          mid_repulsive_weight(0.4), mid_fluid_weight(0.4), mid_path_weight(0.2),
           prediction_dt(0.1), uncertainty_growth(0.1),
           direction_weight(1.0), safety_weight(2.0), efficiency_weight(0.5),
           min_distance(1e-6), max_force(10.0), max_computation_time(0.05) {}

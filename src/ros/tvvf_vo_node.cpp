@@ -85,6 +85,15 @@ namespace tvvf_vo_c
     this->declare_parameter("fluid_strength_factor", 1.0);
     this->declare_parameter("repulsive_weight", 0.4);
     this->declare_parameter("fluid_weight", 0.6);
+    this->declare_parameter("path_direction_weight", 1.0);
+    
+    // 距離別重み調整パラメータ
+    this->declare_parameter("near_repulsive_weight", 0.7);
+    this->declare_parameter("near_fluid_weight", 0.2);
+    this->declare_parameter("near_path_weight", 0.1);
+    this->declare_parameter("mid_repulsive_weight", 0.4);
+    this->declare_parameter("mid_fluid_weight", 0.4);
+    this->declare_parameter("mid_path_weight", 0.2);
 
     // ロボット仕様パラメータ
     this->declare_parameter("max_linear_velocity", 2.0);
@@ -130,6 +139,16 @@ namespace tvvf_vo_c
     config.fluid_strength_factor = this->get_parameter("fluid_strength_factor").as_double();
     config.repulsive_weight = this->get_parameter("repulsive_weight").as_double();
     config.fluid_weight = this->get_parameter("fluid_weight").as_double();
+    config.path_direction_weight = this->get_parameter("path_direction_weight").as_double();
+    
+    // 距離別重み調整パラメータ
+    config.near_repulsive_weight = this->get_parameter("near_repulsive_weight").as_double();
+    config.near_fluid_weight = this->get_parameter("near_fluid_weight").as_double();
+    config.near_path_weight = this->get_parameter("near_path_weight").as_double();
+    config.mid_repulsive_weight = this->get_parameter("mid_repulsive_weight").as_double();
+    config.mid_fluid_weight = this->get_parameter("mid_fluid_weight").as_double();
+    config.mid_path_weight = this->get_parameter("mid_path_weight").as_double();
+    
     config.max_computation_time = this->get_parameter("max_computation_time").as_double();
 
     return config;
