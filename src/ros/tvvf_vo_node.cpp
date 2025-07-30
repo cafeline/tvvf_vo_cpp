@@ -32,7 +32,7 @@ namespace tvvf_vo_c
     cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
     marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("tvvf_vo_markers", 10);
     vector_field_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("tvvf_vo_vector_field", 10);
-    path_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("planned_path", 10);
+    path_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("tvvf_planned_path", 10);
 
     // サブスクライバー初期化
     auto map_qos = rclcpp::QoS(1).reliable().transient_local();
@@ -48,6 +48,10 @@ namespace tvvf_vo_c
 
     static_obstacles_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
         "static_obstacles", 10, std::bind(&TVVFVONode::static_obstacles_callback, this, std::placeholders::_1));
+
+    // adaptive_A_star からのA*経路データをsubscribe
+    path_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
+        "planned_path", 10, std::bind(&TVVFVONode::path_callback, this, std::placeholders::_1));
 
     // タイマー初期化（制御ループ：20Hz）
     control_timer_ = this->create_wall_timer(
@@ -299,6 +303,39 @@ namespace tvvf_vo_c
     }
   }
 
+  void TVVFVONode::path_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg)
+  {
+    try
+    {
+      if (msg->poses.empty())
+      {
+        planned_path_.reset();
+        RCLCPP_WARN(this->get_logger(), "Received empty path from adaptive_A_star");
+        return;
+      }
+
+      // PoseArrayをPathに変換
+      Path new_path;
+      for (const auto& pose : msg->poses)
+      {
+        Position position(pose.position.x, pose.position.y);
+        new_path.add_point(position, 0.0);
+      }
+
+      planned_path_ = new_path;
+      
+      RCLCPP_INFO(this->get_logger(), "Received A* path from adaptive_A_star: %zu points", 
+                  planned_path_->size());
+      
+      // 経路を受け取ったら可視化
+      publish_path_visualization();
+    }
+    catch (const std::exception &e)
+    {
+      RCLCPP_ERROR(this->get_logger(), "Path callback error: %s", e.what());
+    }
+  }
+
   void TVVFVONode::plan_path_to_goal()
   {
     PROFILE_MODULE(profiler_, "A*_PathPlanning");
@@ -354,12 +391,12 @@ namespace tvvf_vo_c
         return;
       }
 
-      // A*経路計画チェック
-      if (!planned_path_.has_value() && path_planner_)
-      {
-        RCLCPP_INFO(this->get_logger(), "Planning A* path...");
-        plan_path_to_goal();
-      }
+      // A*経路は外部のadaptive_A_starパッケージから受け取るため、内部プランニングは無効化
+      // if (!planned_path_.has_value() && path_planner_)
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Planning A* path...");
+      //   plan_path_to_goal();
+      // }
 
       // 目標到達チェック
       double distance_to_goal = robot_state_->position.distance_to(goal_->position);

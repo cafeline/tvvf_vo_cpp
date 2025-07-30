@@ -4,6 +4,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <tf2_ros/buffer.h>
@@ -67,6 +68,7 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr dynamic_obstacles_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr static_obstacles_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr path_sub_;
 
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
@@ -116,6 +118,12 @@ private:
      * @param msg MarkerArrayメッセージ
      */
     void static_obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg);
+
+    /**
+     * @brief adaptive_A_starからの経路データコールバック
+     * @param msg PoseArrayメッセージ
+     */
+    void path_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg);
 
     /**
      * @brief 現在位置からゴールまでの経路を計画
