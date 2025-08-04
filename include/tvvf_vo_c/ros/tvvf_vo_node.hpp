@@ -13,7 +13,6 @@
 
 #include "tvvf_vo_c/core/types.hpp"
 #include "tvvf_vo_c/core/controller.hpp"
-#include "tvvf_vo_c/core/astar_planner.hpp"
 #include "tvvf_vo_c/utils/time_utils.hpp"
 
 #include <memory>
@@ -37,7 +36,6 @@ public:
 private:
     // コア機能
     std::unique_ptr<TVVFVOController> controller_;
-    std::unique_ptr<AStarPathPlanner> path_planner_;
     TVVFVOConfig config_;
 
     // 状態変数
@@ -125,10 +123,6 @@ private:
      */
     void path_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg);
 
-    /**
-     * @brief 現在位置からゴールまでの経路を計画
-     */
-    void plan_path_to_goal();
 
     /**
      * @brief メイン制御ループ

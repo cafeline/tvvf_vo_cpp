@@ -71,13 +71,11 @@ namespace tvvf_vo_c
     this->declare_parameter("k_repulsion", 2.0);
     this->declare_parameter("influence_radius", 3.0);
 
-    // A*経路統合パラメータ
+    // 経路追従パラメータ
     this->declare_parameter("k_path_attraction", 2.0);
     this->declare_parameter("path_influence_radius", 2.0);
     this->declare_parameter("lookahead_distance", 1.5);
     this->declare_parameter("path_smoothing_factor", 0.8);
-    this->declare_parameter("wall_clearance_distance", 0.8);
-    this->declare_parameter("enable_dynamic_replanning", false);
 
     // VO関連パラメータ
     this->declare_parameter("time_horizon", 3.0);
@@ -230,12 +228,6 @@ namespace tvvf_vo_c
     {
       occupancy_grid_ = *msg;
 
-      // A*経路計画器を初期化
-      Position origin(msg->info.origin.position.x, msg->info.origin.position.y);
-      double wall_clearance = this->get_parameter("wall_clearance_distance").as_double();
-
-      path_planner_ = std::make_unique<AStarPathPlanner>(*msg, msg->info.resolution, origin, wall_clearance);
-
       RCLCPP_INFO(this->get_logger(), "Map received: %dx%d, resolution: %.3f m/cell",
                   msg->info.width, msg->info.height, msg->info.resolution);
     }
@@ -310,7 +302,7 @@ namespace tvvf_vo_c
       if (msg->poses.empty())
       {
         planned_path_.reset();
-        RCLCPP_WARN(this->get_logger(), "Received empty path from adaptive_A_star");
+        RCLCPP_WARN(this->get_logger(), "Received empty path from external planner");
         return;
       }
 
@@ -324,7 +316,7 @@ namespace tvvf_vo_c
 
       planned_path_ = new_path;
       
-      RCLCPP_INFO(this->get_logger(), "Received A* path from adaptive_A_star: %zu points", 
+      RCLCPP_INFO(this->get_logger(), "Received external path: %zu points", 
                   planned_path_->size());
       
       // 経路を受け取ったら可視化
@@ -336,42 +328,6 @@ namespace tvvf_vo_c
     }
   }
 
-  void TVVFVONode::plan_path_to_goal()
-  {
-    PROFILE_MODULE(profiler_, "A*_PathPlanning");
-
-    try
-    {
-      if (!path_planner_ || !robot_state_.has_value() || !goal_.has_value())
-      {
-        RCLCPP_WARN(this->get_logger(), "Path planning: missing requirements");
-        return;
-      }
-
-      // A*アルゴリズムで経路計画
-      double start_time = time_utils::get_current_time();
-      auto planned_path = path_planner_->plan_path(robot_state_->position, goal_->position);
-      double planning_time = (time_utils::get_current_time() - start_time) * 1000; // ms
-
-      if (planned_path.has_value())
-      {
-        planned_path_ = planned_path.value();
-        RCLCPP_INFO(this->get_logger(), "A* Path Planning - Points: %zu, Time: %.1f ms, Freq: %.1f Hz",
-                    planned_path_->size(), planning_time, 1000.0 / planning_time);
-        publish_path_visualization();
-      }
-      else
-      {
-        RCLCPP_WARN(this->get_logger(), "A* Path planning failed after %.1f ms", planning_time);
-        planned_path_.reset();
-      }
-    }
-    catch (const std::exception &e)
-    {
-      RCLCPP_ERROR(this->get_logger(), "Path planning error: %s", e.what());
-      planned_path_.reset();
-    }
-  }
 
   void TVVFVONode::control_loop()
   {
@@ -391,12 +347,7 @@ namespace tvvf_vo_c
         return;
       }
 
-      // A*経路は外部のadaptive_A_starパッケージから受け取るため、内部プランニングは無効化
-      // if (!planned_path_.has_value() && path_planner_)
-      // {
-      //   RCLCPP_INFO(this->get_logger(), "Planning A* path...");
-      //   plan_path_to_goal();
-      // }
+      // 外部経路計画器からの経路を待つ（内部計画は行わない）
 
       // 目標到達チェック
       double distance_to_goal = robot_state_->position.distance_to(goal_->position);
@@ -918,5 +869,6 @@ namespace tvvf_vo_c
       RCLCPP_ERROR(this->get_logger(), "Performance stats error: %s", e.what());
     }
   }
+
 
 } // namespace tvvf_vo_c
