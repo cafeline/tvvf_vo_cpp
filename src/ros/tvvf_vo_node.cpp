@@ -19,11 +19,6 @@ namespace tvvf_vo_c
     config_ = create_config_from_parameters();
     controller_ = std::make_unique<TVVFVOController>(config_);
 
-    // 状態変数初期化
-    last_planning_time_ = 0.0;
-    planning_interval_ = 2.0;
-    last_update_time_ = time_utils::get_current_time();
-
     // TF2関連初期化
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -75,7 +70,6 @@ namespace tvvf_vo_c
     this->declare_parameter("k_path_attraction", 2.0);
     this->declare_parameter("path_influence_radius", 2.0);
     this->declare_parameter("lookahead_distance", 1.5);
-    this->declare_parameter("path_smoothing_factor", 0.8);
 
     // VO関連パラメータ
     this->declare_parameter("time_horizon", 3.0);
@@ -102,7 +96,6 @@ namespace tvvf_vo_c
     this->declare_parameter("max_angular_velocity", 2.0);
     this->declare_parameter("max_acceleration", 1.0);
     this->declare_parameter("robot_radius", 0.3);
-    this->declare_parameter("wheel_base", 0.5);
     this->declare_parameter("orientation_tolerance", 0.2);
 
     // フレーム名
@@ -133,7 +126,6 @@ namespace tvvf_vo_c
     config.k_path_attraction = this->get_parameter("k_path_attraction").as_double();
     config.path_influence_radius = this->get_parameter("path_influence_radius").as_double();
     config.lookahead_distance = this->get_parameter("lookahead_distance").as_double();
-    config.path_smoothing_factor = this->get_parameter("path_smoothing_factor").as_double();
     config.time_horizon = this->get_parameter("time_horizon").as_double();
     config.safety_margin = this->get_parameter("safety_margin").as_double();
     config.vo_resolution = this->get_parameter("vo_resolution").as_double();
@@ -226,8 +218,6 @@ namespace tvvf_vo_c
   {
     try
     {
-      occupancy_grid_ = *msg;
-
       RCLCPP_INFO(this->get_logger(), "Map received: %dx%d, resolution: %.3f m/cell",
                   msg->info.width, msg->info.height, msg->info.resolution);
     }

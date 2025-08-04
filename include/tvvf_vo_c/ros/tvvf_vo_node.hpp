@@ -43,14 +43,8 @@ private:
     std::optional<Goal> goal_;
     std::vector<DynamicObstacle> dynamic_obstacles_;
     std::vector<DynamicObstacle> static_obstacles_;
-    std::optional<nav_msgs::msg::OccupancyGrid> occupancy_grid_;
     std::optional<Path> planned_path_;
     
-    // 時間管理
-    double last_planning_time_;
-    double planning_interval_;
-    double last_update_time_;
-
     // TF2関連
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -71,8 +65,7 @@ private:
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
 
-    // 統計情報とプロファイラー
-    std::unordered_map<std::string, double> stats_history_;
+    // プロファイラー
     time_utils::ModuleProfiler profiler_;
     rclcpp::TimerBase::SharedPtr profile_timer_;
 
