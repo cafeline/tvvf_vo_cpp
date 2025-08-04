@@ -86,7 +86,9 @@ std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Po
     double current_distance = std::sqrt(current_relative_pos[0] * current_relative_pos[0] + 
                                        current_relative_pos[1] * current_relative_pos[1]);
     
-    if (current_distance > config_.influence_radius) {
+    // 斥力の影響範囲を中距離閾値で制限
+    double max_repulsive_distance = std::max(config_.mid_distance_threshold, config_.safety_margin * 3.0);
+    if (current_distance > max_repulsive_distance) {
         return {0.0, 0.0};
     }
     
@@ -102,21 +104,22 @@ std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Po
         force_direction = safe_normalize(current_relative_pos);
         double effective_radius = obstacle.radius + config_.safety_margin;
         
-        if (current_distance <= effective_radius) {
-            // 安全マージン内：強い反比例斥力
-            double distance_ratio = current_distance / effective_radius;
-            force_magnitude = config_.k_repulsion * (1.0 / distance_ratio - 1.0) * 2.0;  // 強化
+        if (current_distance <= config_.near_distance_threshold) {
+            // 近距離：強い反比例斥力
+            double distance_ratio = current_distance / config_.near_distance_threshold;
+            force_magnitude = config_.k_repulsion * (1.0 / distance_ratio - 1.0) * 2.0;
             
-        } else if (current_distance <= effective_radius * 2.0) {
-            // 警告域：中程度の斥力（二次関数的減衰）
-            double distance_ratio = (current_distance - effective_radius) / effective_radius;
+        } else if (current_distance <= config_.mid_distance_threshold) {
+            // 中距離：中程度の斥力（二次関数的減衰）
+            double range = config_.mid_distance_threshold - config_.near_distance_threshold;
+            double distance_ratio = (current_distance - config_.near_distance_threshold) / range;
             double quadratic_decay = (1.0 - distance_ratio) * (1.0 - distance_ratio);
             force_magnitude = config_.k_repulsion * 0.8 * quadratic_decay;
             
         } else {
-            // 影響域：弱い指数減衰斥力
-            double decay_factor = std::exp(-(current_distance - effective_radius * 2.0) / 
-                                         (config_.influence_radius - effective_radius * 2.0));
+            // 遠距離：弱い指数減衰斥力
+            double range = max_repulsive_distance - config_.mid_distance_threshold;
+            double decay_factor = std::exp(-(current_distance - config_.mid_distance_threshold) / range);
             force_magnitude = config_.k_repulsion * 0.3 * decay_factor;
         }
     }
@@ -875,17 +878,18 @@ std::array<double, 2> TVVFGenerator::compute_path_integrated_avoidance_vector(co
     double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
     double safe_distance = obstacle.radius + config_.safety_margin;
     
-    // 5. 距離に応じた統合重み計算
+    // 5. 明確な距離区分に基づく統合重み計算
     double repulsive_weight, fluid_weight, path_weight;
     
-    if (distance <= safe_distance) {
+    if (distance <= config_.near_distance_threshold) {
         // 近距離：安全優先（斥力中心）
         repulsive_weight = config_.near_repulsive_weight;
         fluid_weight = config_.near_fluid_weight;
         path_weight = config_.near_path_weight;
-    } else if (distance <= safe_distance * 2.0) {
-        // 中距離：バランス調整
-        double blend_factor = (distance - safe_distance) / safe_distance;
+    } else if (distance <= config_.mid_distance_threshold) {
+        // 中距離：バランス調整（線形補間）
+        double range = config_.mid_distance_threshold - config_.near_distance_threshold;
+        double blend_factor = (distance - config_.near_distance_threshold) / range;
         repulsive_weight = config_.near_repulsive_weight - 
                           (config_.near_repulsive_weight - config_.mid_repulsive_weight) * blend_factor;
         fluid_weight = config_.near_fluid_weight + 

@@ -35,7 +35,6 @@ include_directories(include)
 # Core library
 add_library(${PROJECT_NAME}_core
   src/core/types.cpp
-  src/core/astar_planner.cpp
   src/core/tvvf_generator.cpp
   src/core/vo_calculator.cpp
   src/core/velocity_selector.cpp

@@ -5,13 +5,11 @@ tvvf_vo_c_node:
     k_repulsion: 2.0           # 斥力場強度
     influence_radius: 3.0      # 障害物影響半径 [m]
     
-    # A*経路統合パラメータ
+    
+    # 経路統合パラメータ（ベクトル場統合用）
     k_path_attraction: 2.0          # 経路追従引力強度
     path_influence_radius: 2.0      # 経路影響半径 [m]
     lookahead_distance: 1.5         # 先読み距離 [m]
-    path_smoothing_factor: 0.8      # 経路スムージング係数
-    wall_clearance_distance: 0.8    # 壁からの最小距離 [m]
-    enable_dynamic_replanning: false # 動的再計画の有効/無効
     
     # VO関連パラメータ
     time_horizon: 3.0         # VO時間ホライズン [s]

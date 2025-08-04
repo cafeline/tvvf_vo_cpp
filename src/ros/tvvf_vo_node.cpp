@@ -66,7 +66,7 @@ namespace tvvf_vo_c
     this->declare_parameter("k_repulsion", 2.0);
     this->declare_parameter("influence_radius", 3.0);
 
-    // 経路追従パラメータ
+    // 経路統合パラメータ（ベクトル場統合用）
     this->declare_parameter("k_path_attraction", 2.0);
     this->declare_parameter("path_influence_radius", 2.0);
     this->declare_parameter("lookahead_distance", 1.5);
@@ -82,6 +82,10 @@ namespace tvvf_vo_c
     this->declare_parameter("repulsive_weight", 0.4);
     this->declare_parameter("fluid_weight", 0.6);
     this->declare_parameter("path_direction_weight", 1.0);
+    
+    // 明確な距離区分パラメータ
+    this->declare_parameter("near_distance_threshold", 0.5);
+    this->declare_parameter("mid_distance_threshold", 1.5);
     
     // 距離別重み調整パラメータ
     this->declare_parameter("near_repulsive_weight", 0.7);
@@ -134,6 +138,10 @@ namespace tvvf_vo_c
     config.repulsive_weight = this->get_parameter("repulsive_weight").as_double();
     config.fluid_weight = this->get_parameter("fluid_weight").as_double();
     config.path_direction_weight = this->get_parameter("path_direction_weight").as_double();
+    
+    // 明確な距離区分パラメータ
+    config.near_distance_threshold = this->get_parameter("near_distance_threshold").as_double();
+    config.mid_distance_threshold = this->get_parameter("mid_distance_threshold").as_double();
     
     // 距離別重み調整パラメータ
     config.near_repulsive_weight = this->get_parameter("near_repulsive_weight").as_double();
