@@ -11,10 +11,12 @@ tvvf_vo_c_node:
     path_influence_radius: 2.0      # 経路影響半径 [m]
     lookahead_distance: 1.5         # 先読み距離 [m]
     
-    # VO関連パラメータ
-    time_horizon: 3.0         # VO時間ホライズン [s]
+    # 障害物回避関連パラメータ
     safety_margin: 0.2        # 安全マージン [m]
-    vo_resolution: 0.1        # VO速度解像度 [m/s]
+    
+    # ロボット仕様パラメータ
+    max_linear_velocity: 2.0     # 最大並進速度 [m/s]
+    max_angular_velocity: 2.0    # 最大角速度 [rad/s]
     
     # 予測関連パラメータ
     prediction_dt: 0.1              # 予測時間刻み [s]

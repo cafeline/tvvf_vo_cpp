@@ -36,8 +36,6 @@ include_directories(include)
 add_library(${PROJECT_NAME}_core
   src/core/types.cpp
   src/core/tvvf_generator.cpp
-  src/core/vo_calculator.cpp
-  src/core/velocity_selector.cpp
   src/core/controller.cpp
   src/ros/tvvf_vo_node.cpp
   src/ros/visualizer.cpp

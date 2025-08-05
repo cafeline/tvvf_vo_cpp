@@ -10,18 +10,11 @@ namespace tvvf_vo_c {
 
 TVVFVOController::TVVFVOController(const TVVFVOConfig& config)
     : config_(config),
-      tvvf_generator_(config),
-      vo_calculator_(config),
-      velocity_selector_(config) {
+      tvvf_generator_(config) {
     
     // 統計情報の初期化
     stats_["computation_time"] = 0.0;
     stats_["tvvf_time"] = 0.0;
-    stats_["vo_time"] = 0.0;
-    stats_["selection_time"] = 0.0;
-    stats_["num_vo_cones"] = 0.0;
-    stats_["num_candidates"] = 0.0;
-    stats_["safety_margin"] = 0.0;
 }
 
 ControlOutput TVVFVOController::update(const RobotState& robot_state,
@@ -53,41 +46,36 @@ ControlOutput TVVFVOController::update(const RobotState& robot_state,
             stats_["tvvf_time"] = (get_current_time() - tvvf_start) * 1000;
         }
         
-        // VO制約計算
-        std::vector<VOCone> vo_cones;
-        {
-            PROFILE_MODULE(internal_profiler_, "VO_Calculation");
-            double vo_start = get_current_time();
-            vo_cones = vo_calculator_.compute_vo_set(
-                robot_state, obstacles, config_.time_horizon
-            );
-            stats_["vo_time"] = (get_current_time() - vo_start) * 1000;
-            stats_["num_vo_cones"] = static_cast<double>(vo_cones.size());
-        }
-        
-        // 実行可能速度選択
+        // TVVFベクトルをそのまま速度として出力（差動駆動変換はノード側で実行）
         Velocity selected_velocity;
         {
-            PROFILE_MODULE(internal_profiler_, "Velocity_Selection");
-            double selection_start = get_current_time();
-            selected_velocity = velocity_selector_.select_feasible_velocity(
-                tvvf_vector, vo_cones, robot_state
-            );
-            stats_["selection_time"] = (get_current_time() - selection_start) * 1000;
+            // TVVFベクトルをロボットの速度制限に合わせて正規化
+            double magnitude = std::sqrt(tvvf_vector[0] * tvvf_vector[0] + tvvf_vector[1] * tvvf_vector[1]);
+            
+            if (magnitude > 0.001) {
+                // 最大速度で制限
+                if (magnitude > config_.max_linear_velocity) {
+                    tvvf_vector[0] = (tvvf_vector[0] / magnitude) * config_.max_linear_velocity;
+                    tvvf_vector[1] = (tvvf_vector[1] / magnitude) * config_.max_linear_velocity;
+                }
+                
+                // TVVFベクトルをそのまま2D速度として設定
+                selected_velocity = Velocity(tvvf_vector[0], tvvf_vector[1]);
+            } else {
+                selected_velocity = Velocity(0.0, 0.0);
+            }
         }
         
-        // 安全性評価
-        double safety_margin = compute_safety_margin(robot_state, obstacles);
-        stats_["safety_margin"] = safety_margin;
-        
         // 制御コマンド生成
-        ControlOutput control_output = generate_control_output(
-            selected_velocity, robot_state, safety_margin
+        double total_time = (get_current_time() - start_time) * 1000;
+        stats_["computation_time"] = total_time;
+        
+        return ControlOutput(
+            selected_velocity, 
+            total_time,
+            0.01,  // 固定のdt
+            1.0    // 固定の信頼度
         );
-        
-        stats_["computation_time"] = (get_current_time() - start_time) * 1000;
-        
-        return control_output;
         
     } catch (const std::exception& e) {
         return ControlOutput(
@@ -107,40 +95,6 @@ const TVVFGenerator& TVVFVOController::get_tvvf_generator() const {
     return tvvf_generator_;
 }
 
-double TVVFVOController::compute_safety_margin(const RobotState& robot_state,
-                                              const std::vector<DynamicObstacle>& obstacles) {
-    if (obstacles.empty()) {
-        return 10.0;  // 障害物がない場合は安全な大きな値を返す
-    }
-    
-    double min_distance = std::numeric_limits<double>::max();
-    for (const auto& obstacle : obstacles) {
-        double distance = robot_state.position.distance_to(obstacle.position);
-        double effective_distance = distance - robot_state.radius - obstacle.radius;
-        min_distance = std::min(min_distance, effective_distance);
-    }
-    
-    return std::max(0.0, min_distance);
-}
-
-ControlOutput TVVFVOController::generate_control_output(const Velocity& selected_velocity,
-                                                       const RobotState& robot_state,
-                                                       double safety_margin) {
-    double target_angle = std::atan2(selected_velocity.vy, selected_velocity.vx);
-    double angle_diff = target_angle - robot_state.orientation;
-    
-    // 角度差の正規化
-    angle_diff = normalize_angle(angle_diff);
-    
-    double angular_velocity = angle_diff * 2.0;
-    
-    return ControlOutput(
-        selected_velocity,
-        angular_velocity,
-        config_.max_computation_time,
-        safety_margin
-    );
-}
 
 double TVVFVOController::normalize_angle(double angle) {
     while (angle > M_PI) {

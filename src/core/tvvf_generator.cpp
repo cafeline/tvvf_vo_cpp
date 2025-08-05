@@ -11,10 +11,20 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
                                                     const Goal& goal,
                                                     const std::vector<DynamicObstacle>& obstacles,
                                                     const std::optional<Path>& planned_path) const {
-    // 1. A*経路の存在チェック（必須）
+    // 1. A*経路の存在チェック
     if (!planned_path.has_value() || planned_path->empty()) {
-        // A*経路がない場合はゼロベクトルを返す
-        return {0.0, 0.0};
+        // A*経路がない場合は基本的なゴール向けベクトル場を生成
+        auto goal_force = compute_attractive_force(position, goal);
+        std::array<double, 2> repulsive_force = {0.0, 0.0};
+        
+        // 障害物回避力計算
+        for (const auto& obstacle : obstacles) {
+            auto single_repulsive = compute_radial_repulsive_force(position, obstacle);
+            repulsive_force[0] += single_repulsive[0];
+            repulsive_force[1] += single_repulsive[1];
+        }
+        
+        return {goal_force[0] + repulsive_force[0], goal_force[1] + repulsive_force[1]};
     }
     
     // A*経路追従ベクトル場を使用（必須）

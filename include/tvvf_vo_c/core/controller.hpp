@@ -3,8 +3,6 @@
 
 #include "tvvf_vo_c/core/types.hpp"
 #include "tvvf_vo_c/core/tvvf_generator.hpp"
-#include "tvvf_vo_c/core/vo_calculator.hpp"
-#include "tvvf_vo_c/core/velocity_selector.hpp"
 #include "tvvf_vo_c/utils/time_utils.hpp"
 #include "tvvf_vo_c/utils/math_utils.hpp"
 #include <optional>
@@ -52,8 +50,6 @@ public:
 private:
     TVVFVOConfig config_;
     TVVFGenerator tvvf_generator_;
-    VelocityObstacleCalculator vo_calculator_;
-    FeasibleVelocitySelector velocity_selector_;
 
     // 統計情報とプロファイラー
     mutable std::unordered_map<std::string, double> stats_;
@@ -65,19 +61,6 @@ private:
      * @param obstacles 動的障害物リスト
      * @return 安全マージン
      */
-    double compute_safety_margin(const RobotState& robot_state,
-                                const std::vector<DynamicObstacle>& obstacles);
-
-    /**
-     * @brief 制御コマンド生成
-     * @param selected_velocity 選択された速度
-     * @param robot_state ロボット状態
-     * @param safety_margin 安全マージン
-     * @return 制御出力
-     */
-    ControlOutput generate_control_output(const Velocity& selected_velocity,
-                                         const RobotState& robot_state,
-                                         double safety_margin);
 
     /**
      * @brief 角度差の正規化（-π to π）

@@ -71,10 +71,15 @@ namespace tvvf_vo_c
     this->declare_parameter("path_influence_radius", 2.0);
     this->declare_parameter("lookahead_distance", 1.5);
 
-    // VO関連パラメータ
-    this->declare_parameter("time_horizon", 3.0);
+    // 障害物回避関連パラメータ
     this->declare_parameter("safety_margin", 0.2);
-    this->declare_parameter("vo_resolution", 0.1);
+    
+    // ロボット仕様パラメータ
+    this->declare_parameter("max_linear_velocity", 2.0);
+    this->declare_parameter("max_angular_velocity", 2.0);
+    this->declare_parameter("max_acceleration", 1.0);
+    this->declare_parameter("robot_radius", 0.25);
+    this->declare_parameter("orientation_tolerance", 0.2);
     
     // 流体ベクトル場専用パラメータ
     this->declare_parameter("fluid_influence_radius", 1.5);
@@ -95,12 +100,6 @@ namespace tvvf_vo_c
     this->declare_parameter("mid_fluid_weight", 0.4);
     this->declare_parameter("mid_path_weight", 0.2);
 
-    // ロボット仕様パラメータ
-    this->declare_parameter("max_linear_velocity", 2.0);
-    this->declare_parameter("max_angular_velocity", 2.0);
-    this->declare_parameter("max_acceleration", 1.0);
-    this->declare_parameter("robot_radius", 0.3);
-    this->declare_parameter("orientation_tolerance", 0.2);
 
     // フレーム名
     this->declare_parameter("base_frame", "base_footprint");
@@ -130,9 +129,9 @@ namespace tvvf_vo_c
     config.k_path_attraction = this->get_parameter("k_path_attraction").as_double();
     config.path_influence_radius = this->get_parameter("path_influence_radius").as_double();
     config.lookahead_distance = this->get_parameter("lookahead_distance").as_double();
-    config.time_horizon = this->get_parameter("time_horizon").as_double();
     config.safety_margin = this->get_parameter("safety_margin").as_double();
-    config.vo_resolution = this->get_parameter("vo_resolution").as_double();
+    config.max_linear_velocity = this->get_parameter("max_linear_velocity").as_double();
+    config.max_angular_velocity = this->get_parameter("max_angular_velocity").as_double();
     config.fluid_influence_radius = this->get_parameter("fluid_influence_radius").as_double();
     config.fluid_strength_factor = this->get_parameter("fluid_strength_factor").as_double();
     config.repulsive_weight = this->get_parameter("repulsive_weight").as_double();

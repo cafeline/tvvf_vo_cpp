@@ -170,10 +170,12 @@ struct TVVFVOConfig {
     double path_influence_radius;
     double lookahead_distance;
     
-    // VO関連
-    double time_horizon;
+    // 障害物回避関連
     double safety_margin;
-    double vo_resolution;
+    
+    // ロボット仕様パラメータ
+    double max_linear_velocity;
+    double max_angular_velocity;
     
     // 流体ベクトル場専用パラメータ
     double fluid_influence_radius;    // 水が流れるようなベクトル場の影響範囲 [m]
@@ -213,8 +215,8 @@ struct TVVFVOConfig {
     TVVFVOConfig() 
         : k_attraction(1.0), k_repulsion(2.0), influence_radius(3.0),
           k_path_attraction(2.0), path_influence_radius(2.0), lookahead_distance(1.5),
-          time_horizon(3.0), safety_margin(0.2),
-          vo_resolution(0.1), fluid_influence_radius(1.5), fluid_strength_factor(1.0),
+          safety_margin(0.2), max_linear_velocity(2.0), max_angular_velocity(2.0),
+          fluid_influence_radius(1.5), fluid_strength_factor(1.0),
           repulsive_weight(0.4), fluid_weight(0.6), path_direction_weight(1.0),
           near_distance_threshold(0.5), mid_distance_threshold(1.5),
           near_repulsive_weight(0.7), near_fluid_weight(0.2), near_path_weight(0.1),
@@ -224,28 +226,6 @@ struct TVVFVOConfig {
           min_distance(1e-6), max_force(10.0), max_computation_time(0.05) {}
 };
 
-/**
- * @brief VO錐体クラス
- */
-struct VOCone {
-    enum Type { CONE, FULL_CIRCLE };
-    
-    Type type;
-    int obstacle_id;
-    
-    // 錐体パラメータ
-    Velocity cone_vertex;
-    Velocity cone_left;
-    Velocity cone_right;
-    Velocity tangent_left;
-    Velocity tangent_right;
-    
-    // 円形パラメータ
-    Velocity center;
-    double radius;
-    
-    VOCone() : type(CONE), obstacle_id(0), radius(0.0) {}
-};
 
 /**
  * @brief A*アルゴリズム用ノードクラス
