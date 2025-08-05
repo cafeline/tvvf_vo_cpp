@@ -666,10 +666,6 @@ std::array<double, 2> TVVFGenerator::compute_fluid_avoidance_vector(const Positi
                                         obstacle.position.y - position.y};
     double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
     
-    // 流体ベクトル場の影響圏外の場合はゼロベクトル
-    if (distance > config_.fluid_influence_radius) {
-        return {0.0, 0.0};
-    }
     
     // 安全距離（障害物半径 + 安全マージン）
     double safe_distance = obstacle.radius + config_.safety_margin;
@@ -710,9 +706,9 @@ std::array<double, 2> TVVFGenerator::compute_fluid_avoidance_vector(const Positi
         double normalized_dist = (distance - safe_distance) / safe_distance;
         distance_factor = 0.8 * (1.0 - normalized_dist);
     } else {
-        // 外側：弱い流れ
-        double normalized_dist = (distance - safe_distance * 2.0) / (config_.fluid_influence_radius - safe_distance * 2.0);
-        distance_factor = 0.3 * std::exp(-normalized_dist * 2.0);
+        // 外側：距離に応じて指数関数的に減衰する弱い流れ
+        double decay_distance = distance - safe_distance * 2.0;
+        distance_factor = 0.3 * std::exp(-decay_distance * 0.5);  // 0.5は減衰係数
     }
     
     // 4. 放射成分：障害物から離れる成分（弱い）

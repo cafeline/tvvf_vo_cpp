@@ -178,7 +178,6 @@ struct TVVFVOConfig {
     double max_angular_velocity;
     
     // 流体ベクトル場専用パラメータ
-    double fluid_influence_radius;    // 水が流れるようなベクトル場の影響範囲 [m]
     double fluid_strength_factor;     // 流体効果の強度調整係数
     double repulsive_weight;          // 斥力成分の重み
     double fluid_weight;              // 流体成分の重み
@@ -216,7 +215,7 @@ struct TVVFVOConfig {
         : k_attraction(1.0), k_repulsion(2.0), influence_radius(3.0),
           k_path_attraction(2.0), path_influence_radius(2.0), lookahead_distance(1.5),
           safety_margin(0.2), max_linear_velocity(2.0), max_angular_velocity(2.0),
-          fluid_influence_radius(1.5), fluid_strength_factor(1.0),
+          fluid_strength_factor(1.0),
           repulsive_weight(0.4), fluid_weight(0.6), path_direction_weight(1.0),
           near_distance_threshold(0.5), mid_distance_threshold(1.5),
           near_repulsive_weight(0.7), near_fluid_weight(0.2), near_path_weight(0.1),

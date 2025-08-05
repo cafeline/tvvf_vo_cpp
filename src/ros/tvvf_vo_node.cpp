@@ -82,7 +82,6 @@ namespace tvvf_vo_c
     this->declare_parameter("orientation_tolerance", 0.2);
     
     // 流体ベクトル場専用パラメータ
-    this->declare_parameter("fluid_influence_radius", 1.5);
     this->declare_parameter("fluid_strength_factor", 1.0);
     this->declare_parameter("repulsive_weight", 0.4);
     this->declare_parameter("fluid_weight", 0.6);
@@ -132,7 +131,6 @@ namespace tvvf_vo_c
     config.safety_margin = this->get_parameter("safety_margin").as_double();
     config.max_linear_velocity = this->get_parameter("max_linear_velocity").as_double();
     config.max_angular_velocity = this->get_parameter("max_angular_velocity").as_double();
-    config.fluid_influence_radius = this->get_parameter("fluid_influence_radius").as_double();
     config.fluid_strength_factor = this->get_parameter("fluid_strength_factor").as_double();
     config.repulsive_weight = this->get_parameter("repulsive_weight").as_double();
     config.fluid_weight = this->get_parameter("fluid_weight").as_double();
