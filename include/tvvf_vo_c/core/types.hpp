@@ -195,14 +195,6 @@ struct TVVFVOConfig {
     double mid_fluid_weight;          // 中距離での流体重み
     double mid_path_weight;           // 中距離での経路重み
     
-    // 予測関連
-    double prediction_dt;
-    double uncertainty_growth;
-    
-    // 最適化関連
-    double direction_weight;
-    double safety_weight;
-    double efficiency_weight;
     
     // 数値安定性
     double min_distance;
@@ -220,8 +212,6 @@ struct TVVFVOConfig {
           near_distance_threshold(0.5), mid_distance_threshold(1.5),
           near_repulsive_weight(0.7), near_fluid_weight(0.2), near_path_weight(0.1),
           mid_repulsive_weight(0.4), mid_fluid_weight(0.4), mid_path_weight(0.2),
-          prediction_dt(0.1), uncertainty_growth(0.1),
-          direction_weight(1.0), safety_weight(2.0), efficiency_weight(0.5),
           min_distance(1e-6), max_force(10.0), max_computation_time(0.05) {}
 };
 
