@@ -703,87 +703,82 @@ namespace tvvf_vo_c
         return;
       }
 
-      // 統合ベクトル場計算用のグリッドを作成
-      std::vector<Position> grid_positions;
-      std::vector<std::array<double, 2>> grid_forces;
-
       // パラメータから可視化設定を取得
       double grid_spacing = this->get_parameter("vector_field_resolution").as_double();
       double grid_range = this->get_parameter("vector_field_range").as_double();
       int max_points = this->get_parameter("max_vector_points").as_int();
       double min_magnitude = this->get_parameter("min_vector_magnitude").as_double();
 
+      // 統合ベクトル場計算用のグリッドを作成
+      std::vector<Position> grid_positions;
+      std::vector<std::array<double, 2>> grid_forces;
+      std::vector<double> force_magnitudes; // 力の大きさをキャッシュ
+
       Position robot_pos = robot_state_->position;
 
-      // 動的・静的障害物を統合
+      // 動的・静的障害物を統合（一度だけ実行）
       std::vector<DynamicObstacle> all_obstacles;
+      all_obstacles.reserve(dynamic_obstacles_.size() + static_obstacles_.size());
       all_obstacles.insert(all_obstacles.end(), dynamic_obstacles_.begin(), dynamic_obstacles_.end());
       all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
 
-      // ロボット周囲にグリッドを配置してTVVFを計算
+      // グリッド点数を事前計算して効率的な間引きを実装
+      int grid_x_count = static_cast<int>((2.0 * grid_range) / grid_spacing) + 1;
+      int grid_y_count = static_cast<int>((2.0 * grid_range) / grid_spacing) + 1;
+      int total_grid_points = grid_x_count * grid_y_count;
+      
+      // 間引き率を事前計算
+      int sampling_step = 1;
+      if (total_grid_points > max_points) {
+        sampling_step = static_cast<int>(std::ceil(static_cast<double>(total_grid_points) / max_points));
+      }
+
+      // 予想される最大サイズでメモリを事前確保
+      int estimated_valid_points = std::min(max_points, total_grid_points / sampling_step);
+      grid_positions.reserve(estimated_valid_points);
+      grid_forces.reserve(estimated_valid_points);
+      force_magnitudes.reserve(estimated_valid_points);
+
+      // ロボット周囲にグリッドを配置してTVVFを計算（効率的なサンプリング）
+      if (!controller_) return;
+      
+      const auto &tvvf_generator = controller_->get_tvvf_generator();
+      int grid_index = 0;
+      
       for (double x = robot_pos.x - grid_range; x <= robot_pos.x + grid_range; x += grid_spacing)
       {
         for (double y = robot_pos.y - grid_range; y <= robot_pos.y + grid_range; y += grid_spacing)
         {
-          Position grid_pos(x, y);
-
-          // TVVFGeneratorを使用して統合ベクトル場を計算
-          if (controller_)
-          {
-            const auto &tvvf_generator = controller_->get_tvvf_generator();
-            auto integrated_force = tvvf_generator.compute_vector(
-                grid_pos, 0.0, goal_.value(), all_obstacles, planned_path_);
-
-            // 力が十分大きい場合のみ可視化対象とする
-            double force_magnitude = std::sqrt(integrated_force[0] * integrated_force[0] +
-                                               integrated_force[1] * integrated_force[1]);
-            
-            // デバッグ出力: ベクトル場可視化の値を確認
-            static int viz_debug_counter = 0;
-            viz_debug_counter++;
-            if (viz_debug_counter % 500 == 0) { // 500グリッド点ごとに出力
-              std::cout << "[VIZ DEBUG] Grid pos: (" << grid_pos.x << ", " << grid_pos.y 
-                        << "), Force: (" << integrated_force[0] << ", " << integrated_force[1] 
-                        << "), Magnitude: " << force_magnitude 
-                        << ", Min threshold: " << min_magnitude << std::endl;
-            }
-            
-            if (force_magnitude > min_magnitude)
-            {
-              grid_positions.push_back(grid_pos);
-              grid_forces.push_back(integrated_force);
-            }
+          // 間引きを適用（事前計算された間隔でのみ計算）
+          if (grid_index % sampling_step != 0) {
+            grid_index++;
+            continue;
           }
+          
+          Position grid_pos(x, y);
+          auto integrated_force = tvvf_generator.compute_vector(
+              grid_pos, 0.0, goal_.value(), all_obstacles, planned_path_);
+
+          // 力の大きさを一度だけ計算
+          double force_magnitude = std::sqrt(integrated_force[0] * integrated_force[0] +
+                                             integrated_force[1] * integrated_force[1]);
+          
+          if (force_magnitude > min_magnitude)
+          {
+            grid_positions.push_back(grid_pos);
+            grid_forces.push_back(integrated_force);
+            force_magnitudes.push_back(force_magnitude); // 計算済みの値をキャッシュ
+          }
+          
+          grid_index++;
         }
       }
 
-      // 最大点数制限を適用
-      if (static_cast<int>(grid_positions.size()) > max_points)
-      {
-        // 等間隔で間引く
-        int step = grid_positions.size() / max_points;
-        std::vector<Position> limited_positions;
-        std::vector<std::array<double, 2>> limited_forces;
-
-        for (size_t i = 0; i < grid_positions.size(); i += step)
-        {
-          limited_positions.push_back(grid_positions[i]);
-          limited_forces.push_back(grid_forces[i]);
-        }
-
-        grid_positions = std::move(limited_positions);
-        grid_forces = std::move(limited_forces);
-      }
-
-      // 力の大きさの統計を計算（適応的スケーリング用）
+      // 最大力の大きさを効率的に計算（キャッシュ済みの値を使用）
       double max_force_magnitude = 0.0;
-      double total_force_magnitude = 0.0;
-      for (const auto& force : grid_forces) {
-        double magnitude = std::sqrt(force[0] * force[0] + force[1] * force[1]);
+      for (double magnitude : force_magnitudes) {
         max_force_magnitude = std::max(max_force_magnitude, magnitude);
-        total_force_magnitude += magnitude;
       }
-      double avg_force_magnitude = grid_forces.empty() ? 0.0 : total_force_magnitude / grid_forces.size();
       
       // 解像度ベースの自動スケール計算（重なりを防ぐため解像度の80%を最大矢印長とする）
       double max_arrow_length = grid_spacing * 0.8;
@@ -825,8 +820,7 @@ namespace tvvf_vo_c
           arrow_marker.pose.position.z = 0.1;
 
           // 矢印の方向（ベクトル場の方向）
-          double force_magnitude = std::sqrt(grid_forces[i][0] * grid_forces[i][0] +
-                                             grid_forces[i][1] * grid_forces[i][1]);
+          double force_magnitude = force_magnitudes[i]; // キャッシュ済みの値を使用
           if (force_magnitude > 1e-6)
           {
             double yaw = std::atan2(grid_forces[i][1], grid_forces[i][0]);
@@ -841,7 +835,8 @@ namespace tvvf_vo_c
           // 矢印のサイズ（解像度から自動算出されたスケール係数を使用）
           double arrow_length = force_magnitude * auto_scale_factor;
           
-          // デバッグ出力: 矢印スケーリング確認
+          // デバッグ出力（開発時のみ有効）
+#ifdef DEBUG_VECTOR_FIELD
           static int arrow_debug_counter = 0;
           arrow_debug_counter++;
           if (arrow_debug_counter % 100 == 0) {
@@ -852,6 +847,7 @@ namespace tvvf_vo_c
                       << ", Max allowed arrow length: " << max_arrow_length
                       << ", Final arrow length: " << arrow_length << std::endl;
           }
+#endif
           
           arrow_marker.scale.x = arrow_length; // 長さ
           arrow_marker.scale.y = 0.05;         // 幅
