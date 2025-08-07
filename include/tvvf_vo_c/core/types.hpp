@@ -195,6 +195,12 @@ struct TVVFVOConfig {
     double mid_fluid_weight;          // 中距離での流体重み
     double mid_path_weight;           // 中距離での経路重み
     
+    // 指数的斥力パラメータ（新機能）
+    bool enable_exponential_repulsion;    // 指数的斥力の有効化
+    double exponential_base;              // 指数関数の底
+    double exponential_scale_factor;      // 指数関数のスケーリング係数
+    double max_exponential_distance;      // 指数関数を適用する最大距離
+    double exponential_smoothing_threshold; // 指数関数の滑らか化閾値
     
     // 数値安定性
     double min_distance;
@@ -212,7 +218,9 @@ struct TVVFVOConfig {
           near_distance_threshold(0.5), mid_distance_threshold(1.5),
           near_repulsive_weight(0.7), near_fluid_weight(0.2), near_path_weight(0.1),
           mid_repulsive_weight(0.4), mid_fluid_weight(0.4), mid_path_weight(0.2),
-          min_distance(1e-6), max_force(10.0), max_computation_time(0.05) {}
+          enable_exponential_repulsion(false), exponential_base(2.0), exponential_scale_factor(1.5),
+          max_exponential_distance(1.5), exponential_smoothing_threshold(0.1),
+          min_distance(1e-6), max_force(50.0), max_computation_time(0.05) {}
 };
 
 

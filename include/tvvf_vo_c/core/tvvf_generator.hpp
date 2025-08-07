@@ -291,6 +291,28 @@ private:
                                                                   const DynamicObstacle& obstacle,
                                                                   const std::array<double, 2>& path_direction,
                                                                   const Path& planned_path) const;
+
+    /**
+     * @brief 指数的斥力計算（新機能）
+     * @param position 現在位置
+     * @param obstacle 障害物
+     * @return 指数的斥力ベクトル
+     */
+    std::array<double, 2> compute_exponential_repulsive_force(const Position& position,
+                                                             const DynamicObstacle& obstacle) const;
+
+    /**
+     * @brief 指数的斥力統合型の障害物回避ベクトル計算（新機能）
+     * @param position 現在位置
+     * @param obstacle 障害物
+     * @param path_direction 経路の先読み方向
+     * @param planned_path 計画された経路
+     * @return 指数的斥力を考慮した統合回避ベクトル
+     */
+    std::array<double, 2> compute_exponential_integrated_avoidance_vector(const Position& position,
+                                                                         const DynamicObstacle& obstacle,
+                                                                         const std::array<double, 2>& path_direction,
+                                                                         const Path& planned_path) const;
 };
 
 } // namespace tvvf_vo_c

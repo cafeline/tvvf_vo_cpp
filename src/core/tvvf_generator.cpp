@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <iostream>
 
 namespace tvvf_vo_c {
 
@@ -13,15 +14,39 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
                                                     const std::optional<Path>& planned_path) const {
     // 1. A*経路の存在チェック
     if (!planned_path.has_value() || planned_path->empty()) {
-        // A*経路がない場合は基本的なゴール向けベクトル場を生成
+        // A*経路がない場合は基本的なゴール向けベクトル場を生成（指数的斥力対応）
         auto goal_force = compute_attractive_force(position, goal);
         std::array<double, 2> repulsive_force = {0.0, 0.0};
         
-        // 障害物回避力計算
+        // 障害物回避力計算（指数的斥力対応）
+        static int no_path_debug_counter = 0;
+        no_path_debug_counter++;
+        if (no_path_debug_counter % 50 == 0) {
+            std::cout << "[NO PATH DEBUG] Obstacles: " << obstacles.size() 
+                      << ", Exponential enabled: " << config_.enable_exponential_repulsion << std::endl;
+        }
+        
         for (const auto& obstacle : obstacles) {
-            auto single_repulsive = compute_radial_repulsive_force(position, obstacle);
+            std::array<double, 2> single_repulsive;
+            if (config_.enable_exponential_repulsion) {
+                // 指数的斥力を使用
+                single_repulsive = compute_exponential_repulsive_force(position, obstacle);
+                if (no_path_debug_counter % 50 == 0) {
+                    double distance = std::sqrt((obstacle.position.x - position.x) * (obstacle.position.x - position.x) + 
+                                               (obstacle.position.y - position.y) * (obstacle.position.y - position.y));
+                    std::cout << "[NO PATH DEBUG] Exponential force for obstacle " << obstacle.id 
+                              << " (dist: " << distance << "): (" << single_repulsive[0] << ", " << single_repulsive[1] << ")" << std::endl;
+                }
+            } else {
+                // 従来の放射状斥力を使用
+                single_repulsive = compute_radial_repulsive_force(position, obstacle);
+            }
             repulsive_force[0] += single_repulsive[0];
             repulsive_force[1] += single_repulsive[1];
+        }
+        
+        if (no_path_debug_counter % 50 == 0) {
+            std::cout << "[NO PATH DEBUG] Total repulsive force: (" << repulsive_force[0] << ", " << repulsive_force[1] << ")" << std::endl;
         }
         
         return {goal_force[0] + repulsive_force[0], goal_force[1] + repulsive_force[1]};
@@ -34,12 +59,51 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
     // 2. 経路の先読み方向を計算
     std::array<double, 2> path_direction = compute_path_lookahead_direction(position, planned_path.value());
     
-    // 3. 経路方向統合型の障害物回避力計算
+    // 3. 経路方向統合型の障害物回避力計算（指数的斥力対応）
     std::array<double, 2> repulsive_force = {0.0, 0.0};
+    
+    // デバッグ出力: 障害物数と指数的斥力設定
+    static int debug_counter = 0;
+    debug_counter++;
+    if (debug_counter % 100 == 0) { // 100フレームごとに出力
+        std::cout << "[TVVF DEBUG] Obstacles count: " << obstacles.size() 
+                  << ", Exponential repulsion enabled: " << config_.enable_exponential_repulsion << std::endl;
+    }
+    
     for (const auto& obstacle : obstacles) {
-        auto integrated_vector = compute_path_integrated_avoidance_vector(position, obstacle, path_direction, planned_path.value());
+        // 距離計算（デバッグ用）
+        double distance = std::sqrt((obstacle.position.x - position.x) * (obstacle.position.x - position.x) + 
+                                   (obstacle.position.y - position.y) * (obstacle.position.y - position.y));
+        
+        std::array<double, 2> integrated_vector;
+        if (config_.enable_exponential_repulsion) {
+            // 指数的斥力統合版を使用
+            integrated_vector = compute_exponential_integrated_avoidance_vector(position, obstacle, path_direction, planned_path.value());
+            
+            // デバッグ出力: 指数的斥力ベクトル
+            if (debug_counter % 50 == 0) {
+                std::cout << "[TVVF DEBUG] Exponential repulsion - Obstacle ID: " << obstacle.id 
+                          << ", Distance: " << distance 
+                          << ", Force: (" << integrated_vector[0] << ", " << integrated_vector[1] << ")" << std::endl;
+            }
+        } else {
+            // 従来の統合版を使用
+            integrated_vector = compute_path_integrated_avoidance_vector(position, obstacle, path_direction, planned_path.value());
+            
+            // デバッグ出力: 従来の斥力ベクトル
+            if (debug_counter % 50 == 0) {
+                std::cout << "[TVVF DEBUG] Traditional repulsion - Obstacle ID: " << obstacle.id 
+                          << ", Distance: " << distance 
+                          << ", Force: (" << integrated_vector[0] << ", " << integrated_vector[1] << ")" << std::endl;
+            }
+        }
         repulsive_force[0] += integrated_vector[0];
         repulsive_force[1] += integrated_vector[1];
+    }
+    
+    // デバッグ出力: 総斥力
+    if (debug_counter % 100 == 0) {
+        std::cout << "[TVVF DEBUG] Total repulsive force: (" << repulsive_force[0] << ", " << repulsive_force[1] << ")" << std::endl;
     }
     
     // 4. スタック回避のための適応的合成（時間補正なし）
@@ -931,6 +995,187 @@ std::array<double, 2> TVVFGenerator::compute_path_integrated_avoidance_vector(co
         fluid_weight * fluid_vector[1] + 
         path_weight * path_component[1]
     };
+    
+    return integrated_vector;
+}
+
+std::array<double, 2> TVVFGenerator::compute_exponential_repulsive_force(const Position& position,
+                                                                        const DynamicObstacle& obstacle) const {
+    // 障害物への相対位置ベクトル（ロボットから障害物へ）
+    std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
+                                        obstacle.position.y - position.y};
+    double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
+    
+    // デバッグ出力: 距離と最大適用距離の比較
+    static int exp_debug_counter = 0;
+    exp_debug_counter++;
+    if (exp_debug_counter % 50 == 0) {
+        std::cout << "[EXP FORCE DEBUG] Obstacle ID: " << obstacle.id 
+                  << ", Distance: " << distance 
+                  << ", Max exp distance: " << config_.max_exponential_distance << std::endl;
+    }
+    
+    // 最大指数的斥力適用距離外の場合はゼロベクトル
+    if (distance > config_.max_exponential_distance) {
+        if (exp_debug_counter % 50 == 0) {
+            std::cout << "[EXP FORCE DEBUG] Outside max distance, returning zero force" << std::endl;
+        }
+        return {0.0, 0.0};
+    }
+    
+    // 安全距離（障害物半径 + 安全マージン）
+    double safe_distance = obstacle.radius + config_.safety_margin;
+    
+    // 極近距離での緊急回避
+    if (distance < config_.min_distance) {
+        std::array<double, 2> escape_direction = safe_normalize_with_default(
+            {position.x - obstacle.position.x, position.y - obstacle.position.y}, 
+            1e-8, {1.0, 0.0});
+        return {config_.k_repulsion * 50.0 * escape_direction[0],
+                config_.k_repulsion * 50.0 * escape_direction[1]};
+    }
+    
+    // 障害物から離れる方向
+    std::array<double, 2> repulsive_direction = safe_normalize(
+        {position.x - obstacle.position.x, position.y - obstacle.position.y});
+    
+    // 指数的斥力強度計算
+    double force_magnitude;
+    
+    if (distance <= config_.exponential_smoothing_threshold) {
+        // 滑らか化閾値以下：非常に強い線形斥力（数値的安定性のため）
+        double linear_factor = (config_.exponential_smoothing_threshold - distance) / 
+                              config_.exponential_smoothing_threshold;
+        force_magnitude = config_.k_repulsion * config_.exponential_scale_factor * 
+                         (10.0 + linear_factor * 40.0); // 強力な線形増加
+    } else {
+        // 指数的斥力計算：距離が近づくほど指数的に増加
+        // f(d) = k * scale * base^((max_dist - d) / max_dist)
+        double normalized_distance = (config_.max_exponential_distance - distance) / 
+                                   config_.max_exponential_distance;
+        double exponential_factor = std::pow(config_.exponential_base, 
+                                           normalized_distance * 3.0); // 3.0は指数の強度調整
+        
+        force_magnitude = config_.k_repulsion * config_.exponential_scale_factor * exponential_factor;
+        
+        // デバッグ出力: 指数計算の詳細
+        if (exp_debug_counter % 50 == 0) {
+            std::cout << "[EXP FORCE DEBUG] Exponential calculation - " 
+                      << "normalized_dist: " << normalized_distance 
+                      << ", exp_factor: " << exponential_factor 
+                      << ", k_repulsion: " << config_.k_repulsion
+                      << ", scale_factor: " << config_.exponential_scale_factor
+                      << ", force_magnitude: " << force_magnitude << std::endl;
+        }
+        
+        // 数値オーバーフロー防止
+        force_magnitude = std::min(force_magnitude, config_.max_force * 0.8);
+    }
+    
+    // 距離による最小限の減衰（指数関数が主体だが、遠距離では減衰）
+    if (distance > safe_distance * 2.0) {
+        double decay_factor = std::exp(-(distance - safe_distance * 2.0) * 0.5);
+        force_magnitude *= decay_factor;
+    }
+    
+    std::array<double, 2> result = {force_magnitude * repulsive_direction[0],
+                                    force_magnitude * repulsive_direction[1]};
+    
+    // デバッグ出力: 最終結果
+    if (exp_debug_counter % 50 == 0) {
+        std::cout << "[EXP FORCE DEBUG] Final exponential force: (" << result[0] << ", " << result[1] << ")" << std::endl;
+    }
+    
+    return result;
+}
+
+std::array<double, 2> TVVFGenerator::compute_exponential_integrated_avoidance_vector(const Position& position,
+                                                                                   const DynamicObstacle& obstacle,
+                                                                                   const std::array<double, 2>& path_direction,
+                                                                                   const Path& planned_path) const {
+    // 1. 指数的斥力を計算
+    auto exponential_repulsive_vector = compute_exponential_repulsive_force(position, obstacle);
+    
+    // 2. 経路方向を考慮した流体ベクトル場を計算（既存の実装を再利用）
+    auto fluid_vector = compute_fluid_avoidance_vector(position, obstacle, path_direction);
+    
+    // 3. 経路方向成分を計算（既存の実装と同じ）
+    double path_strength = config_.k_path_attraction * config_.path_direction_weight;
+    std::array<double, 2> path_component = {path_strength * path_direction[0],
+                                           path_strength * path_direction[1]};
+    
+    // 4. 距離計算
+    std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
+                                        obstacle.position.y - position.y};
+    double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
+    double safe_distance = obstacle.radius + config_.safety_margin;
+    
+    // 5. 指数的斥力に適応した重み調整
+    double exponential_repulsive_weight, fluid_weight, path_weight;
+    
+    if (distance <= config_.near_distance_threshold) {
+        // 近距離：指数的斥力を大幅に強化、他は大幅削減
+        exponential_repulsive_weight = config_.near_repulsive_weight * 2.0; // 指数的斥力を強化
+        fluid_weight = config_.near_fluid_weight * 0.5; // 流体を削減
+        path_weight = config_.near_path_weight * 0.3;   // 経路を削減
+    } else if (distance <= config_.mid_distance_threshold) {
+        // 中距離：線形補間だが指数的斥力を優先
+        double range = config_.mid_distance_threshold - config_.near_distance_threshold;
+        double blend_factor = (distance - config_.near_distance_threshold) / range;
+        
+        double near_exp_weight = config_.near_repulsive_weight * 2.0;
+        double mid_exp_weight = config_.mid_repulsive_weight * 1.5; // 中距離でも指数的斥力を強化
+        
+        exponential_repulsive_weight = near_exp_weight - (near_exp_weight - mid_exp_weight) * blend_factor;
+        fluid_weight = config_.near_fluid_weight * 0.5 + 
+                      (config_.mid_fluid_weight - config_.near_fluid_weight * 0.5) * blend_factor;
+        path_weight = config_.near_path_weight * 0.3 + 
+                     (config_.mid_path_weight - config_.near_path_weight * 0.3) * blend_factor;
+    } else {
+        // 遠距離：従来の重みを使用（指数的斥力は自然に減衰）
+        exponential_repulsive_weight = config_.repulsive_weight * 0.8;
+        fluid_weight = config_.fluid_weight * 0.6;
+        path_weight = 0.6; // 経路追従を重視
+    }
+    
+    // 6. 障害物との角度関係を考慮した追加調整（既存の実装と同じ）
+    std::array<double, 2> obstacle_direction = safe_normalize(to_obstacle);
+    double path_obstacle_dot = path_direction[0] * obstacle_direction[0] + 
+                              path_direction[1] * obstacle_direction[1];
+    
+    if (path_obstacle_dot > 0.5) { // 経路前方に障害物
+        exponential_repulsive_weight *= 1.3; // 指数的斥力をさらに強化
+        fluid_weight *= 1.2;
+        path_weight *= 0.7;
+    }
+    
+    // 7. 数値安定性のための力の制限
+    double exp_magnitude = std::sqrt(exponential_repulsive_vector[0] * exponential_repulsive_vector[0] + 
+                                    exponential_repulsive_vector[1] * exponential_repulsive_vector[1]);
+    if (exp_magnitude > config_.max_force * 0.6) {
+        double scale = (config_.max_force * 0.6) / exp_magnitude;
+        exponential_repulsive_vector[0] *= scale;
+        exponential_repulsive_vector[1] *= scale;
+    }
+    
+    // 8. 重み付き統合
+    std::array<double, 2> integrated_vector = {
+        exponential_repulsive_weight * exponential_repulsive_vector[0] + 
+        fluid_weight * fluid_vector[0] + 
+        path_weight * path_component[0],
+        exponential_repulsive_weight * exponential_repulsive_vector[1] + 
+        fluid_weight * fluid_vector[1] + 
+        path_weight * path_component[1]
+    };
+    
+    // 9. 最終的な力の制限（ベクトル場融合時の安定性確保）
+    double final_magnitude = std::sqrt(integrated_vector[0] * integrated_vector[0] + 
+                                      integrated_vector[1] * integrated_vector[1]);
+    if (final_magnitude > config_.max_force) {
+        double scale = config_.max_force / final_magnitude;
+        integrated_vector[0] *= scale;
+        integrated_vector[1] *= scale;
+    }
     
     return integrated_vector;
 }

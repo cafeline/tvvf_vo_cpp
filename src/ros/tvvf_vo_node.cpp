@@ -99,6 +99,15 @@ namespace tvvf_vo_c
     this->declare_parameter("mid_fluid_weight", 0.4);
     this->declare_parameter("mid_path_weight", 0.2);
 
+    // 指数的斥力パラメータ（新機能）
+    this->declare_parameter("enable_exponential_repulsion", false);
+    this->declare_parameter("exponential_base", 2.0);
+    this->declare_parameter("exponential_scale_factor", 1.5);
+    this->declare_parameter("max_exponential_distance", 1.5);
+    this->declare_parameter("exponential_smoothing_threshold", 0.1);
+
+    // 力制限パラメータ
+    this->declare_parameter("max_force", 15.0);
 
     // フレーム名
     this->declare_parameter("base_frame", "base_footprint");
@@ -147,6 +156,25 @@ namespace tvvf_vo_c
     config.mid_repulsive_weight = this->get_parameter("mid_repulsive_weight").as_double();
     config.mid_fluid_weight = this->get_parameter("mid_fluid_weight").as_double();
     config.mid_path_weight = this->get_parameter("mid_path_weight").as_double();
+    
+    // 指数的斥力パラメータの設定
+    config.enable_exponential_repulsion = this->get_parameter("enable_exponential_repulsion").as_bool();
+    config.exponential_base = this->get_parameter("exponential_base").as_double();
+    config.exponential_scale_factor = this->get_parameter("exponential_scale_factor").as_double();
+    config.max_exponential_distance = this->get_parameter("max_exponential_distance").as_double();
+    config.exponential_smoothing_threshold = this->get_parameter("exponential_smoothing_threshold").as_double();
+    
+    // 力制限パラメータの設定
+    config.max_force = this->get_parameter("max_force").as_double();
+    
+    // デバッグ出力: パラメータ読み込み確認
+    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential repulsion enabled: %s", 
+                config.enable_exponential_repulsion ? "true" : "false");
+    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential base: %.2f", config.exponential_base);
+    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential scale factor: %.2f", config.exponential_scale_factor);
+    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Max exponential distance: %.2f", config.max_exponential_distance);
+    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] k_repulsion: %.2f", config.k_repulsion);
+    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] max_force: %.2f", config.max_force);
     
     config.max_computation_time = this->get_parameter("max_computation_time").as_double();
 
@@ -710,6 +738,17 @@ namespace tvvf_vo_c
             // 力が十分大きい場合のみ可視化対象とする
             double force_magnitude = std::sqrt(integrated_force[0] * integrated_force[0] +
                                                integrated_force[1] * integrated_force[1]);
+            
+            // デバッグ出力: ベクトル場可視化の値を確認
+            static int viz_debug_counter = 0;
+            viz_debug_counter++;
+            if (viz_debug_counter % 500 == 0) { // 500グリッド点ごとに出力
+              std::cout << "[VIZ DEBUG] Grid pos: (" << grid_pos.x << ", " << grid_pos.y 
+                        << "), Force: (" << integrated_force[0] << ", " << integrated_force[1] 
+                        << "), Magnitude: " << force_magnitude 
+                        << ", Min threshold: " << min_magnitude << std::endl;
+            }
+            
             if (force_magnitude > min_magnitude)
             {
               grid_positions.push_back(grid_pos);
@@ -781,6 +820,17 @@ namespace tvvf_vo_c
 
           // 矢印のサイズ（力の大きさとスケール係数に比例）
           double arrow_length = std::min(1.0, force_magnitude * scale_factor);
+          
+          // デバッグ出力: 矢印スケーリング確認
+          static int arrow_debug_counter = 0;
+          arrow_debug_counter++;
+          if (arrow_debug_counter % 100 == 0) {
+            std::cout << "[ARROW DEBUG] Force magnitude: " << force_magnitude 
+                      << ", Scale factor: " << scale_factor 
+                      << ", Calculated length: " << (force_magnitude * scale_factor)
+                      << ", Final arrow length: " << arrow_length << std::endl;
+          }
+          
           arrow_marker.scale.x = arrow_length; // 長さ
           arrow_marker.scale.y = 0.05;         // 幅
           arrow_marker.scale.z = 0.05;         // 高さ
