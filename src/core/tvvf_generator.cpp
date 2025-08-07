@@ -111,8 +111,7 @@ std::array<double, 2> TVVFGenerator::compute_vector(const Position& position, do
     std::array<double, 2> total_force = adaptive_force_composition(
         position, path_force, goal_force, repulsive_force, zero_time_correction, obstacles);
     
-    // 5. 数値安定性とクリッピング
-    total_force = clip_magnitude(total_force, config_.max_force);
+    // 5. 数値安定性（max_force制限を削除）
     
     return total_force;
 }
@@ -576,13 +575,7 @@ std::array<double, 2> TVVFGenerator::adaptive_force_composition(const Position& 
         };
     }
     
-    // 8. 最終的な安全チェックと制限
-    double final_magnitude = std::sqrt(result_force[0] * result_force[0] + result_force[1] * result_force[1]);
-    if (final_magnitude > config_.max_force) {
-        double scale = config_.max_force / final_magnitude;
-        result_force[0] *= scale;
-        result_force[1] *= scale;
-    }
+    // 8. 最終的な安全チェック（max_force制限を削除）
     
     return result_force;
 }
@@ -1069,7 +1062,7 @@ std::array<double, 2> TVVFGenerator::compute_exponential_repulsive_force(const P
         }
         
         // 数値オーバーフロー防止
-        force_magnitude = std::min(force_magnitude, config_.max_force * 0.8);
+        // max_force制限を削除
     }
     
     // 距離による最小限の減衰（指数関数が主体だが、遠距離では減衰）
@@ -1149,14 +1142,7 @@ std::array<double, 2> TVVFGenerator::compute_exponential_integrated_avoidance_ve
         path_weight *= 0.7;
     }
     
-    // 7. 数値安定性のための力の制限
-    double exp_magnitude = std::sqrt(exponential_repulsive_vector[0] * exponential_repulsive_vector[0] + 
-                                    exponential_repulsive_vector[1] * exponential_repulsive_vector[1]);
-    if (exp_magnitude > config_.max_force * 0.6) {
-        double scale = (config_.max_force * 0.6) / exp_magnitude;
-        exponential_repulsive_vector[0] *= scale;
-        exponential_repulsive_vector[1] *= scale;
-    }
+    // 7. 数値安定性（max_force制限を削除）
     
     // 8. 重み付き統合
     std::array<double, 2> integrated_vector = {
@@ -1168,14 +1154,7 @@ std::array<double, 2> TVVFGenerator::compute_exponential_integrated_avoidance_ve
         path_weight * path_component[1]
     };
     
-    // 9. 最終的な力の制限（ベクトル場融合時の安定性確保）
-    double final_magnitude = std::sqrt(integrated_vector[0] * integrated_vector[0] + 
-                                      integrated_vector[1] * integrated_vector[1]);
-    if (final_magnitude > config_.max_force) {
-        double scale = config_.max_force / final_magnitude;
-        integrated_vector[0] *= scale;
-        integrated_vector[1] *= scale;
-    }
+    // 9. 最終統合（max_force制限を削除）
     
     return integrated_vector;
 }

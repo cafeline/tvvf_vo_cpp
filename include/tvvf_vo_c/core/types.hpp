@@ -204,7 +204,6 @@ struct TVVFVOConfig {
     
     // 数値安定性
     double min_distance;
-    double max_force;
     
     // 性能関連
     double max_computation_time;
@@ -220,7 +219,7 @@ struct TVVFVOConfig {
           mid_repulsive_weight(0.4), mid_fluid_weight(0.4), mid_path_weight(0.2),
           enable_exponential_repulsion(false), exponential_base(2.0), exponential_scale_factor(1.5),
           max_exponential_distance(1.5), exponential_smoothing_threshold(0.1),
-          min_distance(1e-6), max_force(50.0), max_computation_time(0.05) {}
+          min_distance(1e-6), max_computation_time(0.05) {}
 };
 
 

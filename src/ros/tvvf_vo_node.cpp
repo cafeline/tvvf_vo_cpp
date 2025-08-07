@@ -106,8 +106,6 @@ namespace tvvf_vo_c
     this->declare_parameter("max_exponential_distance", 1.5);
     this->declare_parameter("exponential_smoothing_threshold", 0.1);
 
-    // 力制限パラメータ
-    this->declare_parameter("max_force", 15.0);
 
     // フレーム名
     this->declare_parameter("base_frame", "base_footprint");
@@ -164,8 +162,6 @@ namespace tvvf_vo_c
     config.max_exponential_distance = this->get_parameter("max_exponential_distance").as_double();
     config.exponential_smoothing_threshold = this->get_parameter("exponential_smoothing_threshold").as_double();
     
-    // 力制限パラメータの設定
-    config.max_force = this->get_parameter("max_force").as_double();
     
     // デバッグ出力: パラメータ読み込み確認
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential repulsion enabled: %s", 
@@ -174,7 +170,6 @@ namespace tvvf_vo_c
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential scale factor: %.2f", config.exponential_scale_factor);
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Max exponential distance: %.2f", config.max_exponential_distance);
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] k_repulsion: %.2f", config.k_repulsion);
-    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] max_force: %.2f", config.max_force);
     
     config.max_computation_time = this->get_parameter("max_computation_time").as_double();
 
@@ -780,15 +775,24 @@ namespace tvvf_vo_c
         max_force_magnitude = std::max(max_force_magnitude, magnitude);
       }
       
-      // 解像度ベースの自動スケール計算（重なりを防ぐため解像度の80%を最大矢印長とする）
+      // 解像度ベースの自動スケール計算（適応的スケーリング）
       double max_arrow_length = grid_spacing * 0.8;
       double auto_scale_factor = 0.0;
       
-      // 最大力の大きさから自動でスケール係数を計算
+      // 適応的スケール計算：力の分布に応じて調整
       if (max_force_magnitude > 0.0) {
-        auto_scale_factor = max_arrow_length / max_force_magnitude;
+        // 基準力レベルを設定（通常のナビゲーション力レベル）
+        double reference_force = 10.0;
+        
+        // 最大力が基準より大きい場合は制限、小さい場合は拡大
+        if (max_force_magnitude > reference_force) {
+          auto_scale_factor = max_arrow_length / reference_force;
+        } else {
+          // 小さな力でも見やすくするため、基準の50%程度まで拡大
+          auto_scale_factor = max_arrow_length / (reference_force * 0.5);
+        }
       } else {
-        auto_scale_factor = max_arrow_length; // デフォルト値
+        auto_scale_factor = max_arrow_length / 1.0; // デフォルト値
       }
 
       // 統合ベクトル場マーカーを作成・発行
@@ -832,8 +836,10 @@ namespace tvvf_vo_c
             arrow_marker.pose.orientation.w = q.w();
           }
 
-          // 矢印のサイズ（解像度から自動算出されたスケール係数を使用）
-          double arrow_length = force_magnitude * auto_scale_factor;
+          // 矢印のサイズ（適応的スケーリング：相対的な力の大きさを考慮）
+          double relative_magnitude = force_magnitude / std::max(max_force_magnitude, 1.0);
+          double min_arrow_length = max_arrow_length * 0.1; // 最小矢印長（10%）
+          double arrow_length = min_arrow_length + (max_arrow_length - min_arrow_length) * relative_magnitude;
           
           // デバッグ出力（開発時のみ有効）
 #ifdef DEBUG_VECTOR_FIELD
@@ -841,10 +847,11 @@ namespace tvvf_vo_c
           arrow_debug_counter++;
           if (arrow_debug_counter % 100 == 0) {
             std::cout << "[ARROW DEBUG] Force magnitude: " << force_magnitude 
-                      << ", Auto scale factor: " << auto_scale_factor
+                      << ", Relative magnitude: " << relative_magnitude
                       << ", Max force in field: " << max_force_magnitude
                       << ", Grid spacing: " << grid_spacing
-                      << ", Max allowed arrow length: " << max_arrow_length
+                      << ", Max arrow length: " << max_arrow_length
+                      << ", Min arrow length: " << min_arrow_length
                       << ", Final arrow length: " << arrow_length << std::endl;
           }
 #endif

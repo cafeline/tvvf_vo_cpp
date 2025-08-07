@@ -29,7 +29,6 @@ tvvf_vo_c_node:
     
     # 数値安定性パラメータ
     min_distance: 1.0e-6       # 最小距離制限
-    max_force: 10.0            # 最大力制限
     
     # 性能関連パラメータ
     max_computation_time: 0.05 # 最大計算時間 [s]
