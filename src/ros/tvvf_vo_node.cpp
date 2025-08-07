@@ -710,7 +710,6 @@ namespace tvvf_vo_c
       // パラメータから可視化設定を取得
       double grid_spacing = this->get_parameter("vector_field_resolution").as_double();
       double grid_range = this->get_parameter("vector_field_range").as_double();
-      double scale_factor = this->get_parameter("vector_scale_factor").as_double();
       int max_points = this->get_parameter("max_vector_points").as_int();
       double min_magnitude = this->get_parameter("min_vector_magnitude").as_double();
 
@@ -776,6 +775,27 @@ namespace tvvf_vo_c
         grid_forces = std::move(limited_forces);
       }
 
+      // 力の大きさの統計を計算（適応的スケーリング用）
+      double max_force_magnitude = 0.0;
+      double total_force_magnitude = 0.0;
+      for (const auto& force : grid_forces) {
+        double magnitude = std::sqrt(force[0] * force[0] + force[1] * force[1]);
+        max_force_magnitude = std::max(max_force_magnitude, magnitude);
+        total_force_magnitude += magnitude;
+      }
+      double avg_force_magnitude = grid_forces.empty() ? 0.0 : total_force_magnitude / grid_forces.size();
+      
+      // 解像度ベースの自動スケール計算（重なりを防ぐため解像度の80%を最大矢印長とする）
+      double max_arrow_length = grid_spacing * 0.8;
+      double auto_scale_factor = 0.0;
+      
+      // 最大力の大きさから自動でスケール係数を計算
+      if (max_force_magnitude > 0.0) {
+        auto_scale_factor = max_arrow_length / max_force_magnitude;
+      } else {
+        auto_scale_factor = max_arrow_length; // デフォルト値
+      }
+
       // 統合ベクトル場マーカーを作成・発行
       if (!grid_positions.empty())
       {
@@ -818,16 +838,18 @@ namespace tvvf_vo_c
             arrow_marker.pose.orientation.w = q.w();
           }
 
-          // 矢印のサイズ（力の大きさとスケール係数に比例）
-          double arrow_length = std::min(1.0, force_magnitude * scale_factor);
+          // 矢印のサイズ（解像度から自動算出されたスケール係数を使用）
+          double arrow_length = force_magnitude * auto_scale_factor;
           
           // デバッグ出力: 矢印スケーリング確認
           static int arrow_debug_counter = 0;
           arrow_debug_counter++;
           if (arrow_debug_counter % 100 == 0) {
             std::cout << "[ARROW DEBUG] Force magnitude: " << force_magnitude 
-                      << ", Scale factor: " << scale_factor 
-                      << ", Calculated length: " << (force_magnitude * scale_factor)
+                      << ", Auto scale factor: " << auto_scale_factor
+                      << ", Max force in field: " << max_force_magnitude
+                      << ", Grid spacing: " << grid_spacing
+                      << ", Max allowed arrow length: " << max_arrow_length
                       << ", Final arrow length: " << arrow_length << std::endl;
           }
           
