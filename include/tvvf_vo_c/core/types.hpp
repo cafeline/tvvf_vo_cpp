@@ -183,17 +183,6 @@ struct TVVFVOConfig {
     double fluid_weight;              // 流体成分の重み
     double path_direction_weight;     // 経路方向成分の重み
     
-    // 明確な距離区分パラメータ [m]
-    double near_distance_threshold;   // 近距離の上限 [m]
-    double mid_distance_threshold;    // 中距離の上限 [m]
-    
-    // 距離別重み調整パラメータ
-    double near_repulsive_weight;     // 近距離での斥力重み
-    double near_fluid_weight;         // 近距離での流体重み
-    double near_path_weight;          // 近距離での経路重み
-    double mid_repulsive_weight;      // 中距離での斥力重み
-    double mid_fluid_weight;          // 中距離での流体重み
-    double mid_path_weight;           // 中距離での経路重み
     
     // 指数的斥力パラメータ（新機能）
     bool enable_exponential_repulsion;    // 指数的斥力の有効化
@@ -214,9 +203,6 @@ struct TVVFVOConfig {
           safety_margin(0.2), max_linear_velocity(2.0), max_angular_velocity(2.0),
           fluid_strength_factor(1.0),
           repulsive_weight(0.4), fluid_weight(0.6), path_direction_weight(1.0),
-          near_distance_threshold(0.5), mid_distance_threshold(1.5),
-          near_repulsive_weight(0.7), near_fluid_weight(0.2), near_path_weight(0.1),
-          mid_repulsive_weight(0.4), mid_fluid_weight(0.4), mid_path_weight(0.2),
           enable_exponential_repulsion(false), exponential_base(2.0), exponential_scale_factor(1.5),
           max_exponential_distance(1.5), exponential_smoothing_threshold(0.1),
           min_distance(1e-6), max_computation_time(0.05) {}

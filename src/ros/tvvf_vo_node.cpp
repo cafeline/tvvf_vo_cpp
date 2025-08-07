@@ -87,17 +87,6 @@ namespace tvvf_vo_c
     this->declare_parameter("fluid_weight", 0.6);
     this->declare_parameter("path_direction_weight", 1.0);
     
-    // 明確な距離区分パラメータ
-    this->declare_parameter("near_distance_threshold", 0.5);
-    this->declare_parameter("mid_distance_threshold", 1.5);
-    
-    // 距離別重み調整パラメータ
-    this->declare_parameter("near_repulsive_weight", 0.7);
-    this->declare_parameter("near_fluid_weight", 0.2);
-    this->declare_parameter("near_path_weight", 0.1);
-    this->declare_parameter("mid_repulsive_weight", 0.4);
-    this->declare_parameter("mid_fluid_weight", 0.4);
-    this->declare_parameter("mid_path_weight", 0.2);
 
     // 指数的斥力パラメータ（新機能）
     this->declare_parameter("enable_exponential_repulsion", false);
@@ -143,17 +132,6 @@ namespace tvvf_vo_c
     config.fluid_weight = this->get_parameter("fluid_weight").as_double();
     config.path_direction_weight = this->get_parameter("path_direction_weight").as_double();
     
-    // 明確な距離区分パラメータ
-    config.near_distance_threshold = this->get_parameter("near_distance_threshold").as_double();
-    config.mid_distance_threshold = this->get_parameter("mid_distance_threshold").as_double();
-    
-    // 距離別重み調整パラメータ
-    config.near_repulsive_weight = this->get_parameter("near_repulsive_weight").as_double();
-    config.near_fluid_weight = this->get_parameter("near_fluid_weight").as_double();
-    config.near_path_weight = this->get_parameter("near_path_weight").as_double();
-    config.mid_repulsive_weight = this->get_parameter("mid_repulsive_weight").as_double();
-    config.mid_fluid_weight = this->get_parameter("mid_fluid_weight").as_double();
-    config.mid_path_weight = this->get_parameter("mid_path_weight").as_double();
     
     // 指数的斥力パラメータの設定
     config.enable_exponential_repulsion = this->get_parameter("enable_exponential_repulsion").as_bool();

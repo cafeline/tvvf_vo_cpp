@@ -159,13 +159,13 @@ std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Po
     double current_distance = std::sqrt(current_relative_pos[0] * current_relative_pos[0] + 
                                        current_relative_pos[1] * current_relative_pos[1]);
     
-    // 斥力の影響範囲を中距離閾値で制限
-    double max_repulsive_distance = std::max(config_.mid_distance_threshold, config_.safety_margin * 3.0);
+    // 斥力の影響範囲を設定
+    double max_repulsive_distance = config_.influence_radius;
     if (current_distance > max_repulsive_distance) {
         return {0.0, 0.0};
     }
     
-    // 改善された斥力計算：段階的で滑らかな力の変化
+    // シンプルな斥力計算（距離別重み調整機能を削除）
     std::array<double, 2> force_direction;
     double force_magnitude;
     
@@ -177,24 +177,8 @@ std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Po
         force_direction = safe_normalize(current_relative_pos);
         double effective_radius = obstacle.radius + config_.safety_margin;
         
-        if (current_distance <= config_.near_distance_threshold) {
-            // 近距離：強い反比例斥力
-            double distance_ratio = current_distance / config_.near_distance_threshold;
-            force_magnitude = config_.k_repulsion * (1.0 / distance_ratio - 1.0) * 2.0;
-            
-        } else if (current_distance <= config_.mid_distance_threshold) {
-            // 中距離：中程度の斥力（二次関数的減衰）
-            double range = config_.mid_distance_threshold - config_.near_distance_threshold;
-            double distance_ratio = (current_distance - config_.near_distance_threshold) / range;
-            double quadratic_decay = (1.0 - distance_ratio) * (1.0 - distance_ratio);
-            force_magnitude = config_.k_repulsion * 0.8 * quadratic_decay;
-            
-        } else {
-            // 遠距離：弱い指数減衰斥力
-            double range = max_repulsive_distance - config_.mid_distance_threshold;
-            double decay_factor = std::exp(-(current_distance - config_.mid_distance_threshold) / range);
-            force_magnitude = config_.k_repulsion * 0.3 * decay_factor;
-        }
+        // 距離の逆二乗に比例する斥力
+        force_magnitude = config_.k_repulsion / (current_distance * current_distance);
     }
     
     return {force_magnitude * force_direction[0],
@@ -935,39 +919,18 @@ std::array<double, 2> TVVFGenerator::compute_path_integrated_avoidance_vector(co
     std::array<double, 2> path_component = {path_strength * path_direction[0],
                                            path_strength * path_direction[1]};
     
-    // 4. 距離に基づく重み調整
+    // 4. シンプルな重み計算（距離別重み調整機能を削除）
     std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
                                         obstacle.position.y - position.y};
     double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
     double safe_distance = obstacle.radius + config_.safety_margin;
     
-    // 5. 明確な距離区分に基づく統合重み計算
-    double repulsive_weight, fluid_weight, path_weight;
-    
-    if (distance <= config_.near_distance_threshold) {
-        // 近距離：安全優先（斥力中心）
-        repulsive_weight = config_.near_repulsive_weight;
-        fluid_weight = config_.near_fluid_weight;
-        path_weight = config_.near_path_weight;
-    } else if (distance <= config_.mid_distance_threshold) {
-        // 中距離：バランス調整（線形補間）
-        double range = config_.mid_distance_threshold - config_.near_distance_threshold;
-        double blend_factor = (distance - config_.near_distance_threshold) / range;
-        repulsive_weight = config_.near_repulsive_weight - 
-                          (config_.near_repulsive_weight - config_.mid_repulsive_weight) * blend_factor;
-        fluid_weight = config_.near_fluid_weight + 
-                      (config_.mid_fluid_weight - config_.near_fluid_weight) * blend_factor;
-        path_weight = config_.near_path_weight + 
-                     (config_.mid_path_weight - config_.near_path_weight) * blend_factor;
-    } else {
-        // 遠距離：経路追従重視
-        repulsive_weight = config_.repulsive_weight * 0.3;  // 設定値をさらに減衰
-        fluid_weight = config_.fluid_weight * 0.5;          // 設定値を減衰
-        path_weight = 0.5; // 経路方向を強化
-    }
+    // 5. 固定重み計算
+    double repulsive_weight = config_.repulsive_weight;
+    double fluid_weight = config_.fluid_weight;
+    double path_weight = config_.path_direction_weight;
     
     // 6. 障害物との角度関係を考慮した追加調整
-    // 経路方向と障害物方向の角度を計算
     std::array<double, 2> obstacle_direction = safe_normalize(to_obstacle);
     double path_obstacle_dot = path_direction[0] * obstacle_direction[0] + 
                               path_direction[1] * obstacle_direction[1];
@@ -976,7 +939,7 @@ std::array<double, 2> TVVFGenerator::compute_path_integrated_avoidance_vector(co
     if (path_obstacle_dot > 0.5) { // 経路前方に障害物
         repulsive_weight *= 1.5;
         fluid_weight *= 1.3;
-        path_weight *= 0.7; // 経路方向を一時的に弱める
+        path_weight *= 0.7;
     }
     
     // 7. 重み付き統合
@@ -1103,41 +1066,18 @@ std::array<double, 2> TVVFGenerator::compute_exponential_integrated_avoidance_ve
     double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
     double safe_distance = obstacle.radius + config_.safety_margin;
     
-    // 5. 指数的斥力に適応した重み調整
-    double exponential_repulsive_weight, fluid_weight, path_weight;
+    // 5. シンプルな重み計算（距離別重み調整機能を削除）
+    double exponential_repulsive_weight = config_.repulsive_weight;
+    double fluid_weight = config_.fluid_weight;
+    double path_weight = config_.path_direction_weight;
     
-    if (distance <= config_.near_distance_threshold) {
-        // 近距離：指数的斥力を大幅に強化、他は大幅削減
-        exponential_repulsive_weight = config_.near_repulsive_weight * 2.0; // 指数的斥力を強化
-        fluid_weight = config_.near_fluid_weight * 0.5; // 流体を削減
-        path_weight = config_.near_path_weight * 0.3;   // 経路を削減
-    } else if (distance <= config_.mid_distance_threshold) {
-        // 中距離：線形補間だが指数的斥力を優先
-        double range = config_.mid_distance_threshold - config_.near_distance_threshold;
-        double blend_factor = (distance - config_.near_distance_threshold) / range;
-        
-        double near_exp_weight = config_.near_repulsive_weight * 2.0;
-        double mid_exp_weight = config_.mid_repulsive_weight * 1.5; // 中距離でも指数的斥力を強化
-        
-        exponential_repulsive_weight = near_exp_weight - (near_exp_weight - mid_exp_weight) * blend_factor;
-        fluid_weight = config_.near_fluid_weight * 0.5 + 
-                      (config_.mid_fluid_weight - config_.near_fluid_weight * 0.5) * blend_factor;
-        path_weight = config_.near_path_weight * 0.3 + 
-                     (config_.mid_path_weight - config_.near_path_weight * 0.3) * blend_factor;
-    } else {
-        // 遠距離：従来の重みを使用（指数的斥力は自然に減衰）
-        exponential_repulsive_weight = config_.repulsive_weight * 0.8;
-        fluid_weight = config_.fluid_weight * 0.6;
-        path_weight = 0.6; // 経路追従を重視
-    }
-    
-    // 6. 障害物との角度関係を考慮した追加調整（既存の実装と同じ）
+    // 6. 障害物との角度関係を考慮した追加調整
     std::array<double, 2> obstacle_direction = safe_normalize(to_obstacle);
     double path_obstacle_dot = path_direction[0] * obstacle_direction[0] + 
                               path_direction[1] * obstacle_direction[1];
     
     if (path_obstacle_dot > 0.5) { // 経路前方に障害物
-        exponential_repulsive_weight *= 1.3; // 指数的斥力をさらに強化
+        exponential_repulsive_weight *= 1.3;
         fluid_weight *= 1.2;
         path_weight *= 0.7;
     }
