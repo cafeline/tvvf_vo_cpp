@@ -73,20 +73,20 @@ namespace tvvf_vo_c
 
     // 障害物回避関連パラメータ
     this->declare_parameter("safety_margin", 0.2);
-    
+
     // ロボット仕様パラメータ
     this->declare_parameter("max_linear_velocity", 2.0);
     this->declare_parameter("max_angular_velocity", 2.0);
     this->declare_parameter("max_acceleration", 1.0);
     this->declare_parameter("robot_radius", 0.25);
     this->declare_parameter("orientation_tolerance", 0.2);
-    
+
     // 流体ベクトル場専用パラメータ
     this->declare_parameter("fluid_strength_factor", 1.0);
     this->declare_parameter("repulsive_weight", 0.4);
     this->declare_parameter("fluid_weight", 0.6);
     this->declare_parameter("path_direction_weight", 1.0);
-    
+
 
     // 指数的斥力パラメータ（新機能）
     this->declare_parameter("enable_exponential_repulsion", false);
@@ -131,24 +131,24 @@ namespace tvvf_vo_c
     config.repulsive_weight = this->get_parameter("repulsive_weight").as_double();
     config.fluid_weight = this->get_parameter("fluid_weight").as_double();
     config.path_direction_weight = this->get_parameter("path_direction_weight").as_double();
-    
-    
+
+
     // 指数的斥力パラメータの設定
     config.enable_exponential_repulsion = this->get_parameter("enable_exponential_repulsion").as_bool();
     config.exponential_base = this->get_parameter("exponential_base").as_double();
     config.exponential_scale_factor = this->get_parameter("exponential_scale_factor").as_double();
     config.max_exponential_distance = this->get_parameter("max_exponential_distance").as_double();
     config.exponential_smoothing_threshold = this->get_parameter("exponential_smoothing_threshold").as_double();
-    
-    
+
+
     // デバッグ出力: パラメータ読み込み確認
-    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential repulsion enabled: %s", 
+    RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential repulsion enabled: %s",
                 config.enable_exponential_repulsion ? "true" : "false");
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential base: %.2f", config.exponential_base);
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Exponential scale factor: %.2f", config.exponential_scale_factor);
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] Max exponential distance: %.2f", config.max_exponential_distance);
     RCLCPP_INFO(this->get_logger(), "[PARAM DEBUG] k_repulsion: %.2f", config.k_repulsion);
-    
+
     config.max_computation_time = this->get_parameter("max_computation_time").as_double();
 
     return config;
@@ -311,10 +311,10 @@ namespace tvvf_vo_c
       }
 
       planned_path_ = new_path;
-      
-      RCLCPP_INFO(this->get_logger(), "Received external path: %zu points", 
+
+      RCLCPP_INFO(this->get_logger(), "Received external path: %zu points",
                   planned_path_->size());
-      
+
       // 経路を受け取ったら可視化
       publish_path_visualization();
     }
@@ -632,7 +632,7 @@ namespace tvvf_vo_c
           point_marker.color.b = 0.0;
           point_marker.color.a = 0.8;
         }
-        
+
         point_marker.lifetime = rclcpp::Duration::from_seconds(0);  // 無限ライフタイム
         marker_array.markers.push_back(point_marker);
       }
@@ -699,7 +699,7 @@ namespace tvvf_vo_c
       int grid_x_count = static_cast<int>((2.0 * grid_range) / grid_spacing) + 1;
       int grid_y_count = static_cast<int>((2.0 * grid_range) / grid_spacing) + 1;
       int total_grid_points = grid_x_count * grid_y_count;
-      
+
       // 間引き率を事前計算
       int sampling_step = 1;
       if (total_grid_points > max_points) {
@@ -714,10 +714,10 @@ namespace tvvf_vo_c
 
       // ロボット周囲にグリッドを配置してTVVFを計算（効率的なサンプリング）
       if (!controller_) return;
-      
+
       const auto &tvvf_generator = controller_->get_tvvf_generator();
       int grid_index = 0;
-      
+
       for (double x = robot_pos.x - grid_range; x <= robot_pos.x + grid_range; x += grid_spacing)
       {
         for (double y = robot_pos.y - grid_range; y <= robot_pos.y + grid_range; y += grid_spacing)
@@ -727,7 +727,7 @@ namespace tvvf_vo_c
             grid_index++;
             continue;
           }
-          
+
           Position grid_pos(x, y);
           auto integrated_force = tvvf_generator.compute_vector(
               grid_pos, 0.0, goal_.value(), all_obstacles, planned_path_);
@@ -735,50 +735,27 @@ namespace tvvf_vo_c
           // 力の大きさを一度だけ計算
           double force_magnitude = std::sqrt(integrated_force[0] * integrated_force[0] +
                                              integrated_force[1] * integrated_force[1]);
-          
+
           if (force_magnitude > min_magnitude)
           {
             grid_positions.push_back(grid_pos);
             grid_forces.push_back(integrated_force);
             force_magnitudes.push_back(force_magnitude); // 計算済みの値をキャッシュ
           }
-          
+
           grid_index++;
         }
       }
 
-      // 最大力の大きさを効率的に計算（キャッシュ済みの値を使用）
-      double max_force_magnitude = 0.0;
-      for (double magnitude : force_magnitudes) {
-        max_force_magnitude = std::max(max_force_magnitude, magnitude);
-      }
-      
-      // 解像度ベースの自動スケール計算（適応的スケーリング）
+      // 固定矢印長さの計算
       double max_arrow_length = grid_spacing * 0.8;
-      double auto_scale_factor = 0.0;
-      
-      // 適応的スケール計算：力の分布に応じて調整
-      if (max_force_magnitude > 0.0) {
-        // 基準力レベルを設定（通常のナビゲーション力レベル）
-        double reference_force = 10.0;
-        
-        // 最大力が基準より大きい場合は制限、小さい場合は拡大
-        if (max_force_magnitude > reference_force) {
-          auto_scale_factor = max_arrow_length / reference_force;
-        } else {
-          // 小さな力でも見やすくするため、基準の50%程度まで拡大
-          auto_scale_factor = max_arrow_length / (reference_force * 0.5);
-        }
-      } else {
-        auto_scale_factor = max_arrow_length / 1.0; // デフォルト値
-      }
 
       // 統合ベクトル場マーカーを作成・発行
       if (!grid_positions.empty())
       {
         auto marker_array = visualization_msgs::msg::MarkerArray();
         std::string global_frame = this->get_parameter("global_frame").as_string();
-        
+
         // 最初に既存マーカーをクリア
         auto delete_marker = visualization_msgs::msg::Marker();
         delete_marker.header.frame_id = global_frame;
@@ -814,26 +791,20 @@ namespace tvvf_vo_c
             arrow_marker.pose.orientation.w = q.w();
           }
 
-          // 矢印のサイズ（適応的スケーリング：相対的な力の大きさを考慮）
-          double relative_magnitude = force_magnitude / std::max(max_force_magnitude, 1.0);
-          double min_arrow_length = max_arrow_length * 0.1; // 最小矢印長（10%）
-          double arrow_length = min_arrow_length + (max_arrow_length - min_arrow_length) * relative_magnitude;
-          
+          // 矢印のサイズ（一定長さ）
+          double arrow_length = max_arrow_length;
+
           // デバッグ出力（開発時のみ有効）
 #ifdef DEBUG_VECTOR_FIELD
           static int arrow_debug_counter = 0;
           arrow_debug_counter++;
           if (arrow_debug_counter % 100 == 0) {
-            std::cout << "[ARROW DEBUG] Force magnitude: " << force_magnitude 
-                      << ", Relative magnitude: " << relative_magnitude
-                      << ", Max force in field: " << max_force_magnitude
+            std::cout << "[ARROW DEBUG] Force magnitude: " << force_magnitude
                       << ", Grid spacing: " << grid_spacing
-                      << ", Max arrow length: " << max_arrow_length
-                      << ", Min arrow length: " << min_arrow_length
-                      << ", Final arrow length: " << arrow_length << std::endl;
+                      << ", Fixed arrow length: " << arrow_length << std::endl;
           }
 #endif
-          
+
           arrow_marker.scale.x = arrow_length; // 長さ
           arrow_marker.scale.y = 0.05;         // 幅
           arrow_marker.scale.z = 0.05;         // 高さ
