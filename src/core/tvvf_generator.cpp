@@ -137,19 +137,6 @@ std::array<double, 2> TVVFGenerator::compute_attractive_force(const Position& po
     return attractive_force;
 }
 
-std::array<double, 2> TVVFGenerator::compute_repulsive_force(const Position& position, double time,
-                                                            const std::vector<DynamicObstacle>& obstacles) const {
-    // この関数は後方互換性のために残しておき、元の実装を保持
-    std::array<double, 2> total_repulsive = {0.0, 0.0};
-    
-    for (const auto& obstacle : obstacles) {
-        auto potential_gradient = compute_dynamic_potential_gradient(position, obstacle, time);
-        total_repulsive[0] += potential_gradient[0];
-        total_repulsive[1] += potential_gradient[1];
-    }
-    
-    return total_repulsive;
-}
 
 std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Position& position,
                                                                        const DynamicObstacle& obstacle,
@@ -210,21 +197,6 @@ double TVVFGenerator::compute_time_dependent_weight(double min_distance_time,
     return std::min(total_weight, 10.0);
 }
 
-std::array<double, 2> TVVFGenerator::compute_time_correction(const Position& position, double /* time */,
-                                                            const std::vector<DynamicObstacle>& obstacles,
-                                                            const Goal& goal) const {
-    std::array<double, 2> correction = {0.0, 0.0};
-    std::vector<double> prediction_times = {0.5, 1.0, 2.0};
-    
-    for (double pred_time : prediction_times) {
-        auto time_correction = compute_prediction_correction(position, obstacles, pred_time, goal);
-        double time_weight = std::exp(-pred_time / 2.0);
-        correction[0] += time_weight * time_correction[0];
-        correction[1] += time_weight * time_correction[1];
-    }
-    
-    return {correction[0] * 0.1, correction[1] * 0.1};  // 時間補正の影響をさらに軽減
-}
 
 std::array<double, 2> TVVFGenerator::compute_path_following_force(const Position& position,
                                                                  const Path& planned_path) const {
@@ -371,29 +343,6 @@ std::array<double, 2> TVVFGenerator::compute_cross_track_error(const Position& p
     return cross_track_vector;
 }
 
-std::array<double, 2> TVVFGenerator::compute_prediction_correction(const Position& position,
-                                                                  const std::vector<DynamicObstacle>& obstacles,
-                                                                  double prediction_time,
-                                                                  const Goal& /* goal */) const {
-    std::array<double, 2> correction = {0.0, 0.0};
-    
-    for (const auto& obstacle : obstacles) {
-        Position predicted_pos = obstacle.predict_position(prediction_time);
-        std::array<double, 2> predicted_relative = {position.x - predicted_pos.x,
-                                                    position.y - predicted_pos.y};
-        double predicted_distance = std::sqrt(predicted_relative[0] * predicted_relative[0] + 
-                                             predicted_relative[1] * predicted_relative[1]);
-        
-        if (predicted_distance < config_.influence_radius) {
-            double avoidance_strength = (config_.influence_radius - predicted_distance) / config_.influence_radius;
-            auto avoidance_direction = safe_normalize(predicted_relative);
-            correction[0] += avoidance_strength * avoidance_direction[0] * 0.5;
-            correction[1] += avoidance_strength * avoidance_direction[1] * 0.5;
-        }
-    }
-    
-    return correction;
-}
 
 std::array<double, 2> TVVFGenerator::clip_magnitude(const std::array<double, 2>& vector, double max_magnitude) const {
     double magnitude = std::sqrt(vector[0] * vector[0] + vector[1] * vector[1]);
@@ -821,46 +770,6 @@ std::array<double, 2> TVVFGenerator::compute_radial_repulsive_force(const Positi
             force_magnitude * repulsive_direction[1]};
 }
 
-std::array<double, 2> TVVFGenerator::compute_combined_avoidance_vector(const Position& position,
-                                                                      const DynamicObstacle& obstacle,
-                                                                      const std::array<double, 2>& goal_direction) const {
-    // 1. 放射状斥力を計算
-    auto repulsive_vector = compute_radial_repulsive_force(position, obstacle);
-    
-    // 2. 流体ベクトル場を計算
-    auto fluid_vector = compute_fluid_avoidance_vector(position, obstacle, goal_direction);
-    
-    // 3. 距離に基づく重み調整
-    std::array<double, 2> to_obstacle = {obstacle.position.x - position.x, 
-                                        obstacle.position.y - position.y};
-    double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
-    double safe_distance = obstacle.radius + config_.safety_margin;
-    
-    // 距離に応じて斥力と流体の重みを動的に調整
-    double repulsive_weight, fluid_weight;
-    if (distance <= safe_distance) {
-        // 近距離：斥力を強化
-        repulsive_weight = 0.8;
-        fluid_weight = 0.2;
-    } else if (distance <= safe_distance * 2.0) {
-        // 中距離：バランス調整
-        double blend_factor = (distance - safe_distance) / safe_distance;
-        repulsive_weight = 0.8 - 0.4 * blend_factor;  // 0.8 -> 0.4
-        fluid_weight = 0.2 + 0.4 * blend_factor;      // 0.2 -> 0.6
-    } else {
-        // 遠距離：流体を強化
-        repulsive_weight = config_.repulsive_weight;
-        fluid_weight = config_.fluid_weight;
-    }
-    
-    // 4. 重み付き合成
-    std::array<double, 2> combined_vector = {
-        repulsive_weight * repulsive_vector[0] + fluid_weight * fluid_vector[0],
-        repulsive_weight * repulsive_vector[1] + fluid_weight * fluid_vector[1]
-    };
-    
-    return combined_vector;
-}
 
 std::array<double, 2> TVVFGenerator::compute_path_lookahead_direction(const Position& position,
                                                                      const Path& planned_path) const {

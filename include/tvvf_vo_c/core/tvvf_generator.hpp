@@ -56,15 +56,6 @@ private:
      */
     std::array<double, 2> compute_attractive_force(const Position& position, const Goal& goal) const;
 
-    /**
-     * @brief 時間依存斥力場計算
-     * @param position 現在位置
-     * @param time 現在時刻
-     * @param obstacles 動的障害物リスト
-     * @return 斥力ベクトル
-     */
-    std::array<double, 2> compute_repulsive_force(const Position& position, double time,
-                                                 const std::vector<DynamicObstacle>& obstacles) const;
 
     /**
      * @brief 個別障害物の動的ポテンシャル勾配計算
@@ -99,17 +90,6 @@ private:
                                         double current_distance,
                                         const DynamicObstacle& obstacle) const;
 
-    /**
-     * @brief 時間依存補正項の計算
-     * @param position 現在位置
-     * @param time 現在時刻
-     * @param obstacles 動的障害物リスト
-     * @param goal 目標
-     * @return 補正ベクトル
-     */
-    std::array<double, 2> compute_time_correction(const Position& position, double time,
-                                                 const std::vector<DynamicObstacle>& obstacles,
-                                                 const Goal& goal) const;
 
     /**
      * @brief A*経路追従力計算
@@ -159,18 +139,6 @@ private:
                                                    const Path& planned_path, 
                                                    size_t closest_idx) const;
 
-    /**
-     * @brief 指定時間後の予測に基づく補正ベクトル計算
-     * @param position 現在位置
-     * @param obstacles 動的障害物リスト
-     * @param prediction_time 予測時間
-     * @param goal 目標
-     * @return 補正ベクトル
-     */
-    std::array<double, 2> compute_prediction_correction(const Position& position,
-                                                       const std::vector<DynamicObstacle>& obstacles,
-                                                       double prediction_time,
-                                                       const Goal& goal) const;
 
     /**
      * @brief ベクトルの大きさを制限
@@ -259,16 +227,6 @@ private:
     std::array<double, 2> compute_radial_repulsive_force(const Position& position,
                                                         const DynamicObstacle& obstacle) const;
 
-    /**
-     * @brief 斥力と流体ベクトル場の統合計算
-     * @param position 現在位置
-     * @param obstacle 障害物
-     * @param goal_direction ゴール方向（正規化済み）
-     * @return 統合された回避ベクトル
-     */
-    std::array<double, 2> compute_combined_avoidance_vector(const Position& position,
-                                                           const DynamicObstacle& obstacle,
-                                                           const std::array<double, 2>& goal_direction) const;
 
     /**
      * @brief 現在位置から経路の先読み方向を計算
