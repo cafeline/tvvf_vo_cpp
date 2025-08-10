@@ -334,36 +334,16 @@ std::array<double, 2> TVVFGenerator::adaptive_force_composition(const Position& 
     std::array<double, 2> path_dir = safe_normalize({path_force[0], path_force[1]});
     std::array<double, 2> repulsive_dir = safe_normalize({repulsive_force[0], repulsive_force[1]});
 
-    // 3. 詳細な障害物危険度評価（複数段階）
+    // 3. 簡素化された障害物距離評価
     double min_obstacle_distance = std::numeric_limits<double>::max();
-    double critical_distance = std::numeric_limits<double>::max();
-    double warning_distance = std::numeric_limits<double>::max();
 
     for (const auto& obstacle : obstacles) {
         double distance = position.distance_to(obstacle.position) - obstacle.radius;
         min_obstacle_distance = std::min(min_obstacle_distance, distance);
-
-        // 臨界距離：安全マージン以内
-        if (distance <= config_.safety_margin) {
-            critical_distance = std::min(critical_distance, distance);
-        }
-        // 警告距離：安全マージンの1.5倍以内
-        if (distance <= config_.safety_margin * 1.5) {
-            warning_distance = std::min(warning_distance, distance);
-        }
     }
 
-    // 4. 段階的危険度レベル計算
-    double critical_level = 0.0;
-    double warning_level = 0.0;
+    // 4. 影響圈ベースの危険度レベル計算
     double influence_level = 0.0;
-
-    if (critical_distance < std::numeric_limits<double>::max()) {
-        critical_level = std::max(0.0, 1.0 - critical_distance / config_.safety_margin);
-    }
-    if (warning_distance < std::numeric_limits<double>::max()) {
-        warning_level = std::max(0.0, 1.0 - warning_distance / (config_.safety_margin * 1.5));
-    }
     if (min_obstacle_distance < config_.influence_radius) {
         influence_level = std::max(0.0, 1.0 - min_obstacle_distance / config_.influence_radius);
     }
@@ -390,60 +370,26 @@ std::array<double, 2> TVVFGenerator::adaptive_force_composition(const Position& 
         tangent_force[1] = tangent_strength * tangent_dir[1];
     }
 
-    // 7. 階層的合成戦略
+    // 7. シンプルな統合戦略（指数的斥力に依存）
     std::array<double, 2> result_force;
 
-    if (critical_level > 0.5) {
-        // ==== 緊急回避モード（安全マージン内） ====
-        // 斥力を最優先、経路は補助的
-        double emergency_repulsive_weight = 4.0 + critical_level * 2.0;
-        double emergency_path_weight = 0.3 * (1.0 - critical_level);
-        double emergency_tangent_weight = 1.2;
+    if (influence_level > 0.1) {
+        // ==== 障害物影響圏内：経路と斥力のバランス ====
+        double path_weight = 2.0;
+        double repulsive_weight = 1.0 + influence_level * 2.0;
+        double tangent_weight = 0.8;
 
         result_force = {
-            emergency_repulsive_weight * repulsive_force[0] +
-            emergency_path_weight * path_force[0] +
-            emergency_tangent_weight * tangent_force[0],
-            emergency_repulsive_weight * repulsive_force[1] +
-            emergency_path_weight * path_force[1] +
-            emergency_tangent_weight * tangent_force[1]
-        };
-
-    } else if (warning_level > 0.2) {
-        // ==== 積極的回避モード（警告距離内） ====
-        // 斥力と経路のバランス、接線成分で滑らかに
-        double avoidance_repulsive_weight = 2.0 + warning_level * 2.0;
-        double avoidance_path_weight = 1.5 * (1.0 - warning_level * 0.5);
-        double avoidance_tangent_weight = 1.0;
-
-        result_force = {
-            avoidance_repulsive_weight * repulsive_force[0] +
-            avoidance_path_weight * path_force[0] +
-            avoidance_tangent_weight * tangent_force[0],
-            avoidance_repulsive_weight * repulsive_force[1] +
-            avoidance_path_weight * path_force[1] +
-            avoidance_tangent_weight * tangent_force[1]
-        };
-
-    } else if (influence_level > 0.1) {
-        // ==== 予防的回避モード（影響圏内） ====
-        // 経路優先、斥力は予防的
-        double preventive_path_weight = 2.5;
-        double preventive_repulsive_weight = 0.8 + influence_level * 1.2;
-        double preventive_tangent_weight = 0.6;
-
-        result_force = {
-            preventive_path_weight * path_force[0] +
-            preventive_repulsive_weight * repulsive_force[0] +
-            preventive_tangent_weight * tangent_force[0],
-            preventive_path_weight * path_force[1] +
-            preventive_repulsive_weight * repulsive_force[1] +
-            preventive_tangent_weight * tangent_force[1]
+            path_weight * path_force[0] +
+            repulsive_weight * repulsive_force[0] +
+            tangent_weight * tangent_force[0],
+            path_weight * path_force[1] +
+            repulsive_weight * repulsive_force[1] +
+            tangent_weight * tangent_force[1]
         };
 
     } else {
         // ==== 自由航行モード（障害物なし） ====
-        // 経路追従優先、ゴール引力も考慮
         double free_path_weight = 3.0;
         double free_goal_weight = (goal_magnitude > 0.1 && goal_magnitude < 2.0) ? 1.0 : 0.3;
 
@@ -600,9 +546,6 @@ std::array<double, 2> TVVFGenerator::compute_fluid_avoidance_vector(const Positi
     double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
 
 
-    // 安全距離（障害物半径 + 安全マージン）
-    double safe_distance = obstacle.radius + config_.safety_margin;
-
     // 極近距離での緊急回避
     if (distance < config_.min_distance) {
         std::array<double, 2> escape_direction = safe_normalize_with_default(
@@ -612,36 +555,33 @@ std::array<double, 2> TVVFGenerator::compute_fluid_avoidance_vector(const Positi
                 config_.k_repulsion * 10.0 * escape_direction[1]};
     }
 
-    // 障害物への方向を正規化（要件：向きはロボットから障害物へ）
+    // 障害物への方向を正規化
     std::array<double, 2> obstacle_direction = safe_normalize(to_obstacle);
 
     // 水が流れるような滑らかなベクトル場の計算
-    // 障害物周りで渦のような流れを作る
-
     // 1. 接線成分：障害物の周りを流れるような成分
     std::array<double, 2> tangent_vector = {-obstacle_direction[1], obstacle_direction[0]};
 
     // 2. ゴール方向との内積で流れの向きを決定
     double goal_tangent_dot = goal_direction[0] * tangent_vector[0] + goal_direction[1] * tangent_vector[1];
     if (goal_tangent_dot < 0) {
-        // ゴール方向と逆の場合は接線方向を反転
         tangent_vector[0] = -tangent_vector[0];
         tangent_vector[1] = -tangent_vector[1];
     }
 
-    // 3. 距離に基づく重み計算
+    // 3. 障害物半径ベースの距離因子計算
     double distance_factor;
-    if (distance <= safe_distance) {
-        // 安全距離内：強い流れ
+    if (distance <= obstacle.radius * 2.0) {
+        // 障害物近く：強い流れ
         distance_factor = 1.0;
-    } else if (distance <= safe_distance * 2.0) {
+    } else if (distance <= obstacle.radius * 4.0) {
         // 中間距離：中程度の流れ
-        double normalized_dist = (distance - safe_distance) / safe_distance;
+        double normalized_dist = (distance - obstacle.radius * 2.0) / (obstacle.radius * 2.0);
         distance_factor = 0.8 * (1.0 - normalized_dist);
     } else {
-        // 外側：距離に応じて指数関数的に減衰する弱い流れ
-        double decay_distance = distance - safe_distance * 2.0;
-        distance_factor = 0.3 * std::exp(-decay_distance * 0.5);  // 0.5は減衰係数
+        // 遠距離：指数的減衰
+        double decay_distance = distance - obstacle.radius * 4.0;
+        distance_factor = 0.3 * std::exp(-decay_distance * 0.5);
     }
 
     // 4. 放射成分：障害物から離れる成分（弱い）
@@ -724,8 +664,6 @@ std::array<double, 2> TVVFGenerator::compute_exponential_repulsive_force(const P
         return {0.0, 0.0};
     }
 
-    // 安全距離（障害物半径 + 安全マージン）
-    double safe_distance = obstacle.radius + config_.safety_margin;
 
     // 極近距離での緊急回避
     if (distance < config_.min_distance) {
@@ -764,9 +702,9 @@ std::array<double, 2> TVVFGenerator::compute_exponential_repulsive_force(const P
         // max_force制限を削除
     }
 
-    // 距離による最小限の減衰（指数関数が主体だが、遠距離では減衰）
-    if (distance > safe_distance * 2.0) {
-        double decay_factor = std::exp(-(distance - safe_distance * 2.0) * 0.5);
+    // 障害物半径ベースの遠距離減衰
+    if (distance > obstacle.radius * 4.0) {
+        double decay_factor = std::exp(-(distance - obstacle.radius * 4.0) * 0.3);
         force_magnitude *= decay_factor;
     }
 
