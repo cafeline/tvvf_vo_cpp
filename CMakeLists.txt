@@ -38,6 +38,10 @@ add_library(${PROJECT_NAME}_core
   src/core/tvvf_generator.cpp
   src/core/controller.cpp
   src/ros/tvvf_vo_node.cpp
+  src/ros/tvvf_vo_callbacks.cpp
+  src/ros/tvvf_vo_control.cpp
+  src/ros/tvvf_vo_visualization.cpp
+  src/ros/tvvf_vo_tf.cpp
   src/ros/visualizer.cpp
   src/utils/math_utils.cpp
   src/utils/time_utils.cpp
