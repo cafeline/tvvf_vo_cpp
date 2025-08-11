@@ -13,12 +13,9 @@
 
 #include "tvvf_vo_c/core/types.hpp"
 #include "tvvf_vo_c/core/controller.hpp"
-#include "tvvf_vo_c/utils/time_utils.hpp"
-
 #include <memory>
 #include <vector>
 #include <optional>
-#include <unordered_map>
 #include <string>
 
 namespace tvvf_vo_c {
@@ -65,9 +62,6 @@ private:
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
 
-    // プロファイラー
-    time_utils::ModuleProfiler profiler_;
-    rclcpp::TimerBase::SharedPtr profile_timer_;
 
     /**
      * @brief パラメータ設定
@@ -99,16 +93,11 @@ private:
     void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
 
     /**
-     * @brief 動的障害物データコールバック
+     * @brief 障害物データコールバック（動的・静的共通）
      * @param msg MarkerArrayメッセージ
+     * @param is_dynamic 動的障害物かどうか
      */
-    void dynamic_obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg);
-
-    /**
-     * @brief 静的障害物データコールバック
-     * @param msg MarkerArrayメッセージ
-     */
-    void static_obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg);
+    void obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg, bool is_dynamic);
 
     /**
      * @brief adaptive_A_starからの経路データコールバック
@@ -144,36 +133,14 @@ private:
     void publish_stop_command();
 
     /**
-     * @brief 可視化マーカーの配信
-     */
-    void publish_visualization();
-
-    /**
-     * @brief 計画された経路の可視化マーカーを配信
-     */
-    void publish_path_visualization();
-
-    /**
-     * @brief 空の可視化マーカーを送信（クリア用）
-     */
-    void publish_empty_visualization();
-
-    /**
      * @brief ベクトル場可視化マーカーを配信
      */
     void publish_vector_field_visualization();
 
     /**
-     * @brief 目標マーカー作成
-     * @param marker_id マーカーID
-     * @return 目標マーカー
+     * @brief 空の可視化マーカーを送信（クリア用）
      */
-    visualization_msgs::msg::Marker create_goal_marker(int marker_id);
-
-    /**
-     * @brief パフォーマンス統計の出力
-     */
-    void publish_performance_stats();
+    void publish_empty_visualization();
 
 };
 
