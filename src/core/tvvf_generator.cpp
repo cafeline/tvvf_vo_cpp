@@ -420,14 +420,9 @@ std::array<double, 2> TVVFGenerator::compute_fluid_avoidance_vector(const Positi
                                         obstacle.position.y - position.y};
     double distance = std::sqrt(to_obstacle[0] * to_obstacle[0] + to_obstacle[1] * to_obstacle[1]);
 
-
-    // 極近距離での緊急回避
-    if (distance < config_.min_distance) {
-        std::array<double, 2> escape_direction = safe_normalize_with_default(
-            {position.x - obstacle.position.x, position.y - obstacle.position.y},
-            1e-8, {1.0, 0.0});
-        return {config_.k_repulsion * 10.0 * escape_direction[0],
-                config_.k_repulsion * 10.0 * escape_direction[1]};
+    // max_exponential_distance範囲外の場合は斥力を生成しない
+    if (distance > config_.max_exponential_distance) {
+        return {0.0, 0.0};
     }
 
     // 障害物への方向を正規化
