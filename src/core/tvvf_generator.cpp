@@ -84,65 +84,6 @@ std::array<double, 2> TVVFGenerator::compute_attractive_force(const Position& po
 }
 
 
-std::array<double, 2> TVVFGenerator::compute_dynamic_potential_gradient(const Position& position,
-                                                                       const DynamicObstacle& obstacle,
-                                                                       double /* time */) const {
-    std::array<double, 2> current_relative_pos = {position.x - obstacle.position.x,
-                                                  position.y - obstacle.position.y};
-    double current_distance = std::sqrt(current_relative_pos[0] * current_relative_pos[0] +
-                                       current_relative_pos[1] * current_relative_pos[1]);
-
-    // 斥力の影響範囲を設定
-    double max_repulsive_distance = config_.influence_radius;
-    if (current_distance > max_repulsive_distance) {
-        return {0.0, 0.0};
-    }
-
-    // シンプルな斥力計算（距離別重み調整機能を削除）
-    std::array<double, 2> force_direction;
-    double force_magnitude;
-
-    if (current_distance < config_.min_distance) {
-        // 極近距離：強制的な反発
-        force_direction = safe_normalize_with_default(current_relative_pos, 1e-8, {1.0, 0.0});
-        force_magnitude = config_.k_repulsion * 100.0;
-    } else {
-        force_direction = safe_normalize(current_relative_pos);
-
-        // 距離の逆二乗に比例する斥力
-        force_magnitude = config_.k_repulsion / (current_distance * current_distance);
-    }
-
-    return {force_magnitude * force_direction[0],
-            force_magnitude * force_direction[1]};
-}
-
-double TVVFGenerator::compute_minimum_distance_time(const Position& position,
-                                                   const DynamicObstacle& obstacle,
-                                                   double horizon) const {
-    std::array<double, 2> rel_pos = {position.x - obstacle.position.x, position.y - obstacle.position.y};
-    std::array<double, 2> rel_vel = {-obstacle.velocity.vx, -obstacle.velocity.vy};
-
-    double rel_speed = std::sqrt(rel_vel[0] * rel_vel[0] + rel_vel[1] * rel_vel[1]);
-    if (rel_speed < 0.1) {
-        return 0.0;
-    }
-
-    double t_min = -(rel_pos[0] * rel_vel[0] + rel_pos[1] * rel_vel[1]) / (rel_speed * rel_speed);
-    return std::max(0.0, std::min(t_min, horizon));
-}
-
-double TVVFGenerator::compute_time_dependent_weight(double min_distance_time,
-                                                   double current_distance,
-                                                   const DynamicObstacle& obstacle) const {
-    double base_weight = 1.0;
-    double time_urgency = std::exp(-min_distance_time / 1.0);
-    double distance_urgency = std::exp(-current_distance / obstacle.radius);
-    double total_weight = base_weight * (1.0 + time_urgency + distance_urgency);
-    return std::min(total_weight, 10.0);
-}
-
-
 std::array<double, 2> TVVFGenerator::compute_path_following_force(const Position& position,
                                                                  const Path& planned_path) const {
     if (planned_path.empty()) {
@@ -230,72 +171,6 @@ size_t TVVFGenerator::find_closest_path_point(const Position& position, const Pa
     }
 
     return closest_idx;
-}
-
-size_t TVVFGenerator::find_lookahead_point(const Position& position, const Path& planned_path, size_t start_idx) const {
-    double accumulated_distance = 0.0;
-    Position current_pos = position;
-
-    for (size_t i = start_idx; i < planned_path.size(); ++i) {
-        const Position& path_point_pos = planned_path[i].position;
-        double segment_distance = current_pos.distance_to(path_point_pos);
-        accumulated_distance += segment_distance;
-
-        if (accumulated_distance >= config_.lookahead_distance) {
-            return i;
-        }
-
-        current_pos = path_point_pos;
-    }
-
-    // 経路終端に到達
-    return planned_path.size() - 1;
-}
-
-std::array<double, 2> TVVFGenerator::compute_cross_track_error(const Position& position,
-                                                              const Path& planned_path,
-                                                              size_t closest_idx) const {
-    if (closest_idx >= planned_path.size() - 1) {
-        return {0.0, 0.0};
-    }
-
-    // 現在の経路セグメント
-    const Position& current_point = planned_path[closest_idx].position;
-    const Position& next_point = planned_path[closest_idx + 1].position;
-
-    // 経路方向ベクトル
-    std::array<double, 2> path_direction = {next_point.x - current_point.x,
-                                           next_point.y - current_point.y};
-    double path_length = std::sqrt(path_direction[0] * path_direction[0] +
-                                  path_direction[1] * path_direction[1]);
-
-    if (path_length < config_.min_distance) {
-        return {0.0, 0.0};
-    }
-
-    std::array<double, 2> path_unit = {path_direction[0] / path_length,
-                                      path_direction[1] / path_length};
-
-    // 現在位置から経路点へのベクトル
-    std::array<double, 2> position_vector = {position.x - current_point.x,
-                                            position.y - current_point.y};
-
-    // 経路に垂直な成分（横方向誤差）
-    double cross_track_distance = position_vector[0] * (-path_unit[1]) + position_vector[1] * path_unit[0];
-    std::array<double, 2> cross_track_vector = {-path_unit[1] * cross_track_distance,
-                                               path_unit[0] * cross_track_distance};
-
-    return cross_track_vector;
-}
-
-
-std::array<double, 2> TVVFGenerator::clip_magnitude(const std::array<double, 2>& vector, double max_magnitude) const {
-    double magnitude = std::sqrt(vector[0] * vector[0] + vector[1] * vector[1]);
-    if (magnitude > max_magnitude) {
-        double scale = max_magnitude / magnitude;
-        return {vector[0] * scale, vector[1] * scale};
-    }
-    return vector;
 }
 
 std::array<double, 2> TVVFGenerator::safe_normalize(const std::array<double, 2>& vector, double min_norm) const {
@@ -664,16 +539,6 @@ std::array<double, 2> TVVFGenerator::compute_exponential_repulsive_force(const P
         return {0.0, 0.0};
     }
 
-
-    // 極近距離での緊急回避
-    if (distance < config_.min_distance) {
-        std::array<double, 2> escape_direction = safe_normalize_with_default(
-            {position.x - obstacle.position.x, position.y - obstacle.position.y},
-            1e-8, {1.0, 0.0});
-        return {config_.k_repulsion * 50.0 * escape_direction[0],
-                config_.k_repulsion * 50.0 * escape_direction[1]};
-    }
-
     // 障害物から離れる方向
     std::array<double, 2> repulsive_direction = safe_normalize(
         {position.x - obstacle.position.x, position.y - obstacle.position.y});
@@ -696,16 +561,6 @@ std::array<double, 2> TVVFGenerator::compute_exponential_repulsive_force(const P
                                            normalized_distance * 3.0); // 3.0は指数の強度調整
 
         force_magnitude = config_.k_repulsion * config_.exponential_scale_factor * exponential_factor;
-
-
-        // 数値オーバーフロー防止
-        // max_force制限を削除
-    }
-
-    // 障害物半径ベースの遠距離減衰
-    if (distance > obstacle.radius * 4.0) {
-        double decay_factor = std::exp(-(distance - obstacle.radius * 4.0) * 0.3);
-        force_magnitude *= decay_factor;
     }
 
     std::array<double, 2> result = {force_magnitude * repulsive_direction[0],
@@ -722,22 +577,20 @@ std::array<double, 2> TVVFGenerator::compute_exponential_integrated_avoidance_ve
     // 1. 指数的斥力を計算
     auto exponential_repulsive_vector = compute_exponential_repulsive_force(position, obstacle);
 
-    // 2. 経路方向を考慮した流体ベクトル場を計算（既存の実装を再利用）
+    // 2. 経路方向を考慮した流体ベクトル場を計算
     auto fluid_vector = compute_fluid_avoidance_vector(position, obstacle, path_direction);
 
-    // 3. 経路方向成分を計算（既存の実装と同じ）
+    // 3. 経路方向成分を計算
     double path_strength = config_.k_path_attraction * config_.path_direction_weight;
     std::array<double, 2> path_component = {path_strength * path_direction[0],
                                            path_strength * path_direction[1]};
 
-    // 4. 重み計算（距離別重み調整機能を削除）
+    // 4. 重み計算
     double exponential_repulsive_weight = config_.repulsive_weight;
     double fluid_weight = config_.fluid_weight;
     double path_weight = config_.path_direction_weight;
 
-    // 7. 数値安定性（max_force制限を削除）
-
-    // 8. 重み付き統合
+    // 5. 重み付き統合
     std::array<double, 2> integrated_vector = {
         exponential_repulsive_weight * exponential_repulsive_vector[0] +
         fluid_weight * fluid_vector[0] +
@@ -746,8 +599,6 @@ std::array<double, 2> TVVFGenerator::compute_exponential_integrated_avoidance_ve
         fluid_weight * fluid_vector[1] +
         path_weight * path_component[1]
     };
-
-    // 9. 最終統合（max_force制限を削除）
 
     return integrated_vector;
 }

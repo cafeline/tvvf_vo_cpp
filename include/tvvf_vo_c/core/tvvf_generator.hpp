@@ -57,39 +57,6 @@ private:
     std::array<double, 2> compute_attractive_force(const Position& position, const Goal& goal) const;
 
 
-    /**
-     * @brief 個別障害物の動的ポテンシャル勾配計算
-     * @param position 現在位置
-     * @param obstacle 障害物
-     * @param time 現在時刻
-     * @return ポテンシャル勾配ベクトル
-     */
-    std::array<double, 2> compute_dynamic_potential_gradient(const Position& position,
-                                                            const DynamicObstacle& obstacle,
-                                                            double time) const;
-
-    /**
-     * @brief 最小距離到達時間の計算
-     * @param position 現在位置
-     * @param obstacle 障害物
-     * @param horizon 時間ホライズン
-     * @return 最小距離到達時間
-     */
-    double compute_minimum_distance_time(const Position& position,
-                                        const DynamicObstacle& obstacle,
-                                        double horizon) const;
-
-    /**
-     * @brief 時間依存重み計算
-     * @param min_distance_time 最小距離到達時間
-     * @param current_distance 現在距離
-     * @param obstacle 障害物
-     * @return 時間依存重み
-     */
-    double compute_time_dependent_weight(double min_distance_time,
-                                        double current_distance,
-                                        const DynamicObstacle& obstacle) const;
-
 
     /**
      * @brief A*経路追従力計算
@@ -119,34 +86,6 @@ private:
      */
     size_t find_closest_path_point(const Position& position, const Path& planned_path) const;
 
-    /**
-     * @brief 先読み距離に基づく目標点インデックスを見つける
-     * @param position 現在位置
-     * @param planned_path 計画された経路
-     * @param start_idx 開始インデックス
-     * @return 先読み点のインデックス
-     */
-    size_t find_lookahead_point(const Position& position, const Path& planned_path, size_t start_idx) const;
-
-    /**
-     * @brief 経路からの横方向誤差ベクトル計算
-     * @param position 現在位置
-     * @param planned_path 計画された経路
-     * @param closest_idx 最も近い経路点のインデックス
-     * @return 横方向誤差ベクトル
-     */
-    std::array<double, 2> compute_cross_track_error(const Position& position, 
-                                                   const Path& planned_path, 
-                                                   size_t closest_idx) const;
-
-
-    /**
-     * @brief ベクトルの大きさを制限
-     * @param vector 入力ベクトル
-     * @param max_magnitude 最大大きさ
-     * @return 制限されたベクトル
-     */
-    std::array<double, 2> clip_magnitude(const std::array<double, 2>& vector, double max_magnitude) const;
 
     /**
      * @brief 安全な正規化（ゼロ除算回避）

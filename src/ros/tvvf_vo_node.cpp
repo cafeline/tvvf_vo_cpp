@@ -82,6 +82,25 @@ namespace tvvf_vo_c
     this->declare_parameter("enable_vector_field_viz", true);
     this->declare_parameter("vector_field_resolution", 0.5);
     this->declare_parameter("vector_field_range", 4.0);
+
+    // 流体ベクトル場専用パラメータ
+    this->declare_parameter("fluid_strength_factor", 1.0);
+    this->declare_parameter("repulsive_weight", 0.4);
+    this->declare_parameter("fluid_weight", 0.6);
+    this->declare_parameter("path_direction_weight", 1.0);
+
+    // 指数的斥力パラメータ
+    this->declare_parameter("enable_exponential_repulsion", false);
+    this->declare_parameter("exponential_base", 2.0);
+    this->declare_parameter("exponential_scale_factor", 1.5);
+    this->declare_parameter("max_exponential_distance", 1.5);
+    this->declare_parameter("exponential_smoothing_threshold", 0.1);
+
+    // 数値安定性
+    this->declare_parameter("min_distance", 0.000001);
+
+    // 性能関連
+    this->declare_parameter("max_computation_time", 0.05);
   }
 
   TVVFVOConfig TVVFVONode::create_config_from_parameters()
@@ -98,17 +117,24 @@ namespace tvvf_vo_c
     config.max_linear_velocity = this->get_parameter("max_linear_velocity").as_double();
     config.max_angular_velocity = this->get_parameter("max_angular_velocity").as_double();
     
-    // デフォルト値設定（簡略化のため固定値）
-    config.fluid_strength_factor = 1.0;
-    config.repulsive_weight = 0.4;
-    config.fluid_weight = 0.6;
-    config.path_direction_weight = 1.0;
-    config.enable_exponential_repulsion = false;
-    config.exponential_base = 2.0;
-    config.exponential_scale_factor = 1.5;
-    config.max_exponential_distance = 1.5;
-    config.exponential_smoothing_threshold = 0.1;
-    config.max_computation_time = 0.05;
+    // 流体ベクトル場専用パラメータ
+    config.fluid_strength_factor = this->get_parameter("fluid_strength_factor").as_double();
+    config.repulsive_weight = this->get_parameter("repulsive_weight").as_double();
+    config.fluid_weight = this->get_parameter("fluid_weight").as_double();
+    config.path_direction_weight = this->get_parameter("path_direction_weight").as_double();
+    
+    // 指数的斥力パラメータ
+    config.enable_exponential_repulsion = this->get_parameter("enable_exponential_repulsion").as_bool();
+    config.exponential_base = this->get_parameter("exponential_base").as_double();
+    config.exponential_scale_factor = this->get_parameter("exponential_scale_factor").as_double();
+    config.max_exponential_distance = this->get_parameter("max_exponential_distance").as_double();
+    config.exponential_smoothing_threshold = this->get_parameter("exponential_smoothing_threshold").as_double();
+    
+    // 数値安定性
+    config.min_distance = this->get_parameter("min_distance").as_double();
+    
+    // 性能関連
+    config.max_computation_time = this->get_parameter("max_computation_time").as_double();
 
     return config;
   }
