@@ -15,6 +15,10 @@ namespace tvvf_vo_c {
 class GlobalFieldGenerator {
 public:
     GlobalFieldGenerator();
+    
+    // パラメータ設定
+    void setMapRepulsionGain(double gain) { map_repulsion_gain_ = gain; }
+    void setMapRepulsionRange(double range) { map_repulsion_range_ = range; }
     ~GlobalFieldGenerator() = default;
     
     // 静的ベクトル場の事前計算
@@ -45,6 +49,13 @@ private:
     double last_computation_time_;
     bool static_field_computed_;
     
+    // マップ端斥力パラメータ
+    double map_repulsion_gain_ = 0.5;
+    double map_repulsion_range_ = 1.0;
+    
+    // ゴール位置を保存
+    Position goal_position_;
+    
     // ヘルパー関数
     std::array<double, 2> computeTotalRepulsiveForce(
         const Position& position,
@@ -64,6 +75,13 @@ private:
     
     bool hasSignificantMagnitude(
         const std::array<double, 2>& vector) const;
+    
+    // マップ端からの斥力計算
+    std::array<double, 2> computeMapBoundaryRepulsion(
+        const Position& position) const;
+    
+    double getDistanceToNearestObstacle(
+        const Position& position) const;
 };
 
 }  // namespace tvvf_vo_c

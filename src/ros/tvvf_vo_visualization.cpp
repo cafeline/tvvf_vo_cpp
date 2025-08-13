@@ -48,14 +48,16 @@ namespace tvvf_vo_c
       {
         for (int x = 0; x < field.width; x += stride)
         {
-          // ベクトル取得
-          auto vec = field.vectors[y][x];
-          
-          // ゼロベクトルはスキップ
-          if (std::abs(vec[0]) < 0.01 && std::abs(vec[1]) < 0.01) continue;
-          
           // ワールド座標に変換
           Position world_pos = field.gridToWorld(x, y);
+          
+          // GlobalFieldGeneratorを使用して統合されたベクトルを取得
+          // (マップ端斥力を含む)
+          auto vec = global_field_generator_->getVelocityAt(world_pos, dynamic_obstacles_);
+          
+          // NaNチェックとゼロベクトルのスキップ
+          if (std::isnan(vec[0]) || std::isnan(vec[1])) continue;
+          if (std::abs(vec[0]) < 0.01 && std::abs(vec[1]) < 0.01) continue;
           
           // 矢印マーカーを作成
           auto marker = visualization_msgs::msg::Marker();
@@ -86,9 +88,41 @@ namespace tvvf_vo_c
           
           // 色（速度に基づく）
           double speed = std::sqrt(vec[0] * vec[0] + vec[1] * vec[1]);
-          marker.color.r = speed;
-          marker.color.g = 1.0 - speed;
-          marker.color.b = 0.0;
+          
+          // 斥力が強い場所を赤く表示
+          // 通常の引力場を緑で表示
+          // マップ端からの距離を計算して色を決定
+          auto [grid_x, grid_y] = field.worldToGrid(world_pos);
+          bool near_obstacle = false;
+          
+          // 周囲に障害物があるかチェック
+          for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -2; dx <= 2; dx++) {
+              int nx = grid_x + dx;
+              int ny = grid_y + dy;
+              if (nx < 0 || nx >= field.width || ny < 0 || ny >= field.height) {
+                near_obstacle = true;
+                break;
+              }
+              if (field.grid[ny][nx].is_obstacle) {
+                near_obstacle = true;
+                break;
+              }
+            }
+            if (near_obstacle) break;
+          }
+          
+          if (near_obstacle) {
+            // 障害物近くは赤系の色
+            marker.color.r = 0.9;
+            marker.color.g = 0.2;
+            marker.color.b = 0.1;
+          } else {
+            // 通常のベクトル場は緑系
+            marker.color.r = 0.1;
+            marker.color.g = 0.8;
+            marker.color.b = 0.2;
+          }
           marker.color.a = 0.7;
           
           marker.lifetime = rclcpp::Duration::from_seconds(0.1);

@@ -14,6 +14,12 @@ namespace tvvf_vo_c
     
     // グローバルフィールドジェネレータ初期化
     global_field_generator_ = std::make_unique<GlobalFieldGenerator>();
+    
+    // マップ端斥力パラメータを設定
+    global_field_generator_->setMapRepulsionGain(
+        this->get_parameter("map_repulsion_gain").as_double());
+    global_field_generator_->setMapRepulsionRange(
+        this->get_parameter("map_repulsion_range").as_double());
 
     // TF2関連初期化
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -57,6 +63,10 @@ namespace tvvf_vo_c
 
     // 制御関連
     this->declare_parameter("goal_tolerance", 0.1);
+    
+    // マップ端斥力パラメータ
+    this->declare_parameter("map_repulsion_gain", 0.5);
+    this->declare_parameter("map_repulsion_range", 1.0);
     
   }
 

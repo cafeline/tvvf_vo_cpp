@@ -189,7 +189,15 @@ std::array<double, 2> FastMarching::normalizeGradient(double dx, double dy) cons
     const double norm = std::sqrt(dx*dx + dy*dy);
     
     if (norm > GRADIENT_EPSILON) {
-        return {dx / norm, dy / norm};
+        double nx = dx / norm;
+        double ny = dy / norm;
+        
+        // NaNチェック
+        if (std::isnan(nx) || std::isnan(ny)) {
+            return {0.0, 0.0};
+        }
+        
+        return {nx, ny};
     }
     
     return {0.0, 0.0};
