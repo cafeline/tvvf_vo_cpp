@@ -8,7 +8,6 @@ namespace tvvf_vo_c
   {
     Position goal_position(msg->point.x, msg->point.y);
     goal_ = Goal(goal_position, this->get_parameter("goal_tolerance").as_double());
-    planned_path_.reset();
     RCLCPP_INFO(this->get_logger(), "Goal set: (%.2f, %.2f) with tolerance %.2f", 
                 goal_position.x, goal_position.y, goal_->tolerance);
     

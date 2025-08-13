@@ -2,7 +2,6 @@
 #define TVVF_VO_C_CORE_CONTROLLER_HPP_
 
 #include "tvvf_vo_c/core/types.hpp"
-#include "tvvf_vo_c/core/tvvf_generator.hpp"
 #include "tvvf_vo_c/utils/time_utils.hpp"
 #include "tvvf_vo_c/utils/math_utils.hpp"
 #include <optional>
@@ -41,15 +40,9 @@ public:
      */
     std::unordered_map<std::string, double> get_stats() const;
 
-    /**
-     * @brief TVVFGeneratorへのアクセス（可視化用）
-     * @return TVVFGeneratorの参照
-     */
-    const TVVFGenerator& get_tvvf_generator() const;
 
 private:
     TVVFVOConfig config_;
-    TVVFGenerator tvvf_generator_;
 
     // 統計情報とプロファイラー
     mutable std::unordered_map<std::string, double> stats_;

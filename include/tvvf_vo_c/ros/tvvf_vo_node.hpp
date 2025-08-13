@@ -4,7 +4,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
-#include <geometry_msgs/msg/pose_array.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <tf2_ros/buffer.h>
@@ -42,7 +41,6 @@ private:
     std::optional<Goal> goal_;
     std::vector<DynamicObstacle> dynamic_obstacles_;
     std::vector<DynamicObstacle> static_obstacles_;
-    std::optional<Path> planned_path_;
     std::optional<nav_msgs::msg::OccupancyGrid> current_map_;
     
     // TF2関連
@@ -53,7 +51,6 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vector_field_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr path_pub_;
 
     // サブスクライバー
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
