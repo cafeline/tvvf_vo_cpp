@@ -76,6 +76,12 @@ namespace tvvf_vo_c
 
     // 制御関連
     this->declare_parameter("goal_tolerance", 0.1);
+    
+    // デバッグ/テスト用
+    this->declare_parameter("use_fixed_robot_pose", false);
+    this->declare_parameter("fixed_robot_x", 0.0);
+    this->declare_parameter("fixed_robot_y", 0.0);
+    this->declare_parameter("fixed_robot_theta", 0.0);
 
     // ベクトル場可視化パラメータ
     this->declare_parameter("enable_vector_field_viz", true);

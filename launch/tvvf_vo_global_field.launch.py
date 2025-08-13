@@ -64,6 +64,12 @@ def generate_launch_description():
             # 制御関連
             'goal_tolerance': 0.2,
             
+            # デバッグ/テスト用（TFが利用できない場合）
+            'use_fixed_robot_pose': True,  # TFの代わりに固定位置を使用
+            'fixed_robot_x': 1.0,          # ロボットの初期X座標
+            'fixed_robot_y': 1.0,          # ロボットの初期Y座標
+            'fixed_robot_theta': 0.0,      # ロボットの初期角度
+            
             # 可視化設定
             'enable_vector_field_viz': LaunchConfiguration('enable_vector_field_viz'),
             'vector_field_resolution': 0.5,

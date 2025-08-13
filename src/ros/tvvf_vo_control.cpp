@@ -14,8 +14,16 @@ namespace tvvf_vo_c
       robot_state_ = get_robot_pose_from_tf();
 
       // 状態チェック
-      if (!robot_state_.has_value() || !goal_.has_value())
+      if (!robot_state_.has_value())
       {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, 
+                             "Cannot get robot pose from TF");
+        return;
+      }
+      
+      if (!goal_.has_value())
+      {
+        // ゴールが設定されていない場合は何もしない（これは正常）
         return;
       }
 
@@ -37,31 +45,61 @@ namespace tvvf_vo_c
       all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
 
       // GlobalFieldGeneratorでベクトル場生成
-      VectorField global_field;
-      if (global_field_generator_ && current_map_.has_value()) {
-        global_field = global_field_generator_->generateField(dynamic_obstacles_);
+      ControlOutput control_output;
+      
+      if (global_field_generator_ && global_field_generator_->isStaticFieldReady()) {
+        // GlobalFieldGeneratorから速度ベクトルを取得
+        auto velocity_vector = global_field_generator_->getVelocityAt(
+            robot_state_->position, dynamic_obstacles_);
         
-        // パフォーマンス統計をログ出力
+        // デバッグ: 速度ベクトルを出力
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                            "Global field velocity at robot: (%.6f, %.6f)",
+                            velocity_vector[0], velocity_vector[1]);
+        
+        // 速度ベクトルをスケーリング（正規化されているので最大速度を乗算）
+        double max_vel = this->get_parameter("max_linear_velocity").as_double();
+        velocity_vector[0] *= max_vel;
+        velocity_vector[1] *= max_vel;
+        
+        // ControlOutputを作成
+        control_output = ControlOutput(
+            Velocity(velocity_vector[0], velocity_vector[1]),
+            0.01,  // computation_time
+            0.01,  // dt
+            1.0    // confidence
+        );
+        
+        // ベクトル場の可視化用にフィールドを生成
         if (this->count_subscribers("tvvf_vo_vector_field") > 0) {
-          double computation_time = global_field_generator_->getLastComputationTime();
-          RCLCPP_DEBUG(this->get_logger(), "Global field computation time: %.3f ms", 
-                       computation_time * 1000.0);
+          VectorField global_field = global_field_generator_->generateField(dynamic_obstacles_);
+          if (global_field.width > 0 && global_field.height > 0) {
+            publish_global_field_visualization(global_field);
+          }
         }
+      } else {
+        // GlobalFieldGeneratorが準備できていない場合は旧実装を使用
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                            "Using legacy controller - field ready: %s",
+                            (global_field_generator_ && global_field_generator_->isStaticFieldReady()) ? "yes" : "no");
+        control_output = controller_->update(
+            robot_state_.value(), all_obstacles, goal_.value(), planned_path_);
       }
-
-      // TVVF-VO制御更新
-      ControlOutput control_output = controller_->update(
-          robot_state_.value(), all_obstacles, goal_.value(), planned_path_);
 
       // 制御コマンド発行
       publish_control_command(control_output);
+      
+      // デバッグログ
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                          "Control output: vx=%.6f, vy=%.6f | Robot: (%.2f, %.2f, %.2f) | Goal: (%.2f, %.2f)",
+                          control_output.velocity_command.vx,
+                          control_output.velocity_command.vy,
+                          robot_state_->position.x, robot_state_->position.y, robot_state_->orientation,
+                          goal_->position.x, goal_->position.y);
 
-      // ベクトル場可視化
-      if (this->get_parameter("enable_vector_field_viz").as_bool())
-      {
-        if (global_field.width > 0 && global_field.height > 0) {
-          publish_global_field_visualization(global_field);
-        } else {
+      // ベクトル場可視化（旧実装のみ）
+      if (!global_field_generator_ || !global_field_generator_->isStaticFieldReady()) {
+        if (this->get_parameter("enable_vector_field_viz").as_bool()) {
           publish_vector_field_visualization();
         }
       }
@@ -81,6 +119,11 @@ namespace tvvf_vo_c
 
     auto [linear_x, angular_z] = convert_to_differential_drive(
         desired_vx, desired_vy, robot_state_->orientation);
+
+    // デバッグ: 変換前後の値を出力
+    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                        "Velocity conversion: (vx:%.6f, vy:%.6f) -> (linear:%.6f, angular:%.6f)",
+                        desired_vx, desired_vy, linear_x, angular_z);
 
     auto cmd_msg = geometry_msgs::msg::Twist();
     cmd_msg.linear.x = linear_x;

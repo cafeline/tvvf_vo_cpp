@@ -31,6 +31,13 @@ public:
     // パフォーマンス計測用
     double getLastComputationTime() const;
     
+    // ロボット位置での速度ベクトル取得
+    std::array<double, 2> getVelocityAt(const Position& position,
+                                         const std::vector<DynamicObstacle>& obstacles);
+    
+    // 静的場が計算済みかチェック
+    bool isStaticFieldReady() const { return static_field_computed_; }
+    
 private:
     std::unique_ptr<WavefrontExpander> wavefront_expander_;
     std::unique_ptr<FastMarching> fast_marching_;

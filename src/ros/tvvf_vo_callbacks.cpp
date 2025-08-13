@@ -9,12 +9,20 @@ namespace tvvf_vo_c
     Position goal_position(msg->point.x, msg->point.y);
     goal_ = Goal(goal_position, this->get_parameter("goal_tolerance").as_double());
     planned_path_.reset();
-    RCLCPP_INFO(this->get_logger(), "Goal set: (%.2f, %.2f)", goal_position.x, goal_position.y);
+    RCLCPP_INFO(this->get_logger(), "Goal set: (%.2f, %.2f) with tolerance %.2f", 
+                goal_position.x, goal_position.y, goal_->tolerance);
     
     // GlobalFieldGeneratorで静的場を再計算
     if (current_map_.has_value() && global_field_generator_) {
       global_field_generator_->precomputeStaticField(current_map_.value(), goal_position);
       RCLCPP_INFO(this->get_logger(), "Static field precomputed for new goal");
+    } else {
+      if (!current_map_.has_value()) {
+        RCLCPP_WARN(this->get_logger(), "No map available for static field computation");
+      }
+      if (!global_field_generator_) {
+        RCLCPP_ERROR(this->get_logger(), "GlobalFieldGenerator not initialized");
+      }
     }
   }
 

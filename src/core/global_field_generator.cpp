@@ -188,4 +188,40 @@ bool GlobalFieldGenerator::hasSignificantMagnitude(
            std::abs(vector[1]) > MIN_MAGNITUDE_THRESHOLD;
 }
 
+// ロボット位置での速度ベクトル取得
+std::array<double, 2> GlobalFieldGenerator::getVelocityAt(const Position& position,
+                                                          const std::vector<DynamicObstacle>& obstacles) {
+    if (!static_field_computed_) {
+        return {0.0, 0.0};
+    }
+    
+    // 静的場からベクトル取得
+    auto [grid_x, grid_y] = static_field_.worldToGrid(position);
+    
+    // 範囲チェック
+    if (grid_x < 0 || grid_x >= static_field_.width || 
+        grid_y < 0 || grid_y >= static_field_.height) {
+        return {0.0, 0.0};
+    }
+    
+    // 静的場のベクトル
+    std::array<double, 2> static_vector = static_field_.vectors[grid_y][grid_x];
+    
+    // 動的障害物からの斥力
+    if (!obstacles.empty()) {
+        auto repulsive_force = computeTotalRepulsiveForce(position, obstacles);
+        
+        // 斥力が有意な場合のみブレンド
+        if (hasSignificantMagnitude(repulsive_force)) {
+            static_vector = blendAndNormalizeVectors(
+                static_vector,
+                repulsive_force,
+                DEFAULT_BLEND_WEIGHT
+            );
+        }
+    }
+    
+    return static_vector;
+}
+
 }  // namespace tvvf_vo_c

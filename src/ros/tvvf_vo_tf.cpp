@@ -7,6 +7,29 @@ namespace tvvf_vo_c
 
   std::optional<RobotState> TVVFVONode::get_robot_pose_from_tf()
   {
+    // デバッグ/テスト用: 固定ロボット位置を使用
+    if (this->get_parameter("use_fixed_robot_pose").as_bool())
+    {
+      Position position(
+        this->get_parameter("fixed_robot_x").as_double(),
+        this->get_parameter("fixed_robot_y").as_double()
+      );
+      double yaw = this->get_parameter("fixed_robot_theta").as_double();
+      Velocity velocity(0.0, 0.0);
+      
+      RobotState robot_state(
+        position, velocity, yaw,
+        this->get_parameter("max_linear_velocity").as_double(),
+        1.0,  // max_acceleration固定値
+        this->get_parameter("robot_radius").as_double()
+      );
+      
+      RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                           "Using fixed robot pose: (%.2f, %.2f, %.2f)",
+                           position.x, position.y, yaw);
+      return robot_state;
+    }
+    
     try
     {
       std::string base_frame = this->get_parameter("base_frame").as_string();
