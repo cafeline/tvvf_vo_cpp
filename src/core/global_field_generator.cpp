@@ -209,72 +209,79 @@ std::array<double, 2> GlobalFieldGenerator::getVelocityAt(const Position& positi
         return {0.0, 0.0};
     }
     
-    // 静的場のベクトル
-    std::array<double, 2> result_vector = static_field_.vectors[grid_y][grid_x];
+    // ゴールへの引力ベクトル（正規化前）
+    double dx_goal = goal_position_.x - position.x;
+    double dy_goal = goal_position_.y - position.y;
+    double dist_to_goal = std::sqrt(dx_goal*dx_goal + dy_goal*dy_goal);
     
-    // NaNチェック
-    if (std::isnan(result_vector[0]) || std::isnan(result_vector[1])) {
-        // 静的場自体がNaNの場合はゼロベクトルを返す
-        result_vector = {0.0, 0.0};
-    }
+    // 引力成分（静的場または直接計算）
+    std::array<double, 2> attraction_force = static_field_.vectors[grid_y][grid_x];
     
-    // マップ端（占有領域）からの斥力
-    // ただし、静的場がNaNの場合は斥力のみを使用
-    if (std::isnan(result_vector[0]) || std::isnan(result_vector[1])) {
-        auto map_repulsion = computeMapBoundaryRepulsion(position);
-        if (!std::isnan(map_repulsion[0]) && !std::isnan(map_repulsion[1])) {
-            // 静的場がNaNなので斥力のみを正規化して返す
-            double mag = std::sqrt(map_repulsion[0]*map_repulsion[0] + 
-                                 map_repulsion[1]*map_repulsion[1]);
-            if (mag > 0.01) {
-                result_vector = {map_repulsion[0]/mag, map_repulsion[1]/mag};
-            } else {
-                // ゴールへの単純な引力
-                double dx = goal_position_.x - position.x;
-                double dy = goal_position_.y - position.y;
-                double dist = std::sqrt(dx*dx + dy*dy);
-                if (dist > 0.01) {
-                    result_vector = {dx/dist, dy/dist};
-                } else {
-                    result_vector = {0.0, 0.0};
-                }
-            }
+    // 静的場がNaNの場合は直接ゴールへの引力を計算
+    if (std::isnan(attraction_force[0]) || std::isnan(attraction_force[1])) {
+        if (dist_to_goal > 0.01) {
+            // ゴール方向の単位ベクトル × 引力強度
+            double attraction_strength = 1.0;  // 基本引力強度
+            attraction_force = {attraction_strength * dx_goal / dist_to_goal,
+                               attraction_strength * dy_goal / dist_to_goal};
+        } else {
+            attraction_force = {0.0, 0.0};
         }
     } else {
-        // 通常の斥力統合
-        auto map_repulsion = computeMapBoundaryRepulsion(position);
-        if (hasSignificantMagnitude(map_repulsion)) {
-            if (!std::isnan(map_repulsion[0]) && !std::isnan(map_repulsion[1])) {
-                // 斥力の強さに基づいて動的にブレンド比率を決定
-                double repulsion_magnitude = std::sqrt(map_repulsion[0]*map_repulsion[0] + 
-                                                      map_repulsion[1]*map_repulsion[1]);
-                // 斥力が強いほどブレンド比率を上げる（最大0.9）
-                double dynamic_blend_weight = std::min(0.9, repulsion_magnitude * map_repulsion_gain_ / 10.0);
-                
-                result_vector = blendAndNormalizeVectors(
-                    result_vector,
-                    map_repulsion,
-                    dynamic_blend_weight
-                );
-            }
-        }
+        // 静的場のベクトルをそのまま引力として使用（既に正規化済み）
+        // 強度を付加
+        double attraction_strength = 1.0;
+        attraction_force[0] *= attraction_strength;
+        attraction_force[1] *= attraction_strength;
     }
     
-    // 動的障害物からの斥力
+    // マップ端からの斥力（正規化前）
+    auto map_repulsion = computeMapBoundaryRepulsion(position);
+    
+    // 動的障害物からの斥力（正規化前）
+    std::array<double, 2> dynamic_repulsion = {0.0, 0.0};
     if (!obstacles.empty()) {
-        auto repulsive_force = computeTotalRepulsiveForce(position, obstacles);
-        
-        // 斥力が有意な場合のみブレンド
-        if (hasSignificantMagnitude(repulsive_force)) {
-            result_vector = blendAndNormalizeVectors(
-                result_vector,
-                repulsive_force,
-                DEFAULT_BLEND_WEIGHT
-            );
-        }
+        dynamic_repulsion = computeTotalRepulsiveForce(position, obstacles);
     }
     
-    return result_vector;
+    // 連続的なポテンシャル場ベースの合成
+    // 全ての力を正規化前に合成
+    std::array<double, 2> total_force = {0.0, 0.0};
+    
+    // 引力を追加
+    total_force[0] += attraction_force[0];
+    total_force[1] += attraction_force[1];
+    
+    // 斥力を追加（マップ端）
+    if (!std::isnan(map_repulsion[0]) && !std::isnan(map_repulsion[1])) {
+        // 距離に基づく重み付け（障害物に近いほど斥力が強くなる）
+        double distance_to_obstacle = getDistanceToNearestObstacle(position);
+        
+        // シグモイド関数で滑らかな遷移を実現
+        // 障害物に近づくと急激に斥力が増加
+        double sigmoid_factor = 1.0 / (1.0 + std::exp(5.0 * (distance_to_obstacle - map_repulsion_range_ * 0.5)));
+        
+        total_force[0] += map_repulsion[0] * sigmoid_factor;
+        total_force[1] += map_repulsion[1] * sigmoid_factor;
+    }
+    
+    // 動的障害物の斥力を追加
+    if (hasSignificantMagnitude(dynamic_repulsion)) {
+        total_force[0] += dynamic_repulsion[0];
+        total_force[1] += dynamic_repulsion[1];
+    }
+    
+    // 合成されたベクトルを正規化
+    double total_magnitude = std::sqrt(total_force[0]*total_force[0] + 
+                                       total_force[1]*total_force[1]);
+    
+    if (total_magnitude > MIN_MAGNITUDE_THRESHOLD) {
+        // 正規化して単位ベクトルにする
+        return {total_force[0] / total_magnitude, 
+                total_force[1] / total_magnitude};
+    }
+    
+    return {0.0, 0.0};
 }
 
 // マップ端からの斥力計算
