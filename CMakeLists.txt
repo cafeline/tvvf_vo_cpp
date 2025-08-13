@@ -35,7 +35,6 @@ include_directories(include)
 # Core library
 add_library(${PROJECT_NAME}_core
   src/core/types.cpp
-  src/core/controller.cpp
   src/core/wavefront_expander.cpp
   src/core/fast_marching.cpp
   src/core/global_field_generator.cpp

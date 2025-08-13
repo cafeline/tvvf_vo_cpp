@@ -11,7 +11,6 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "tvvf_vo_c/core/types.hpp"
-#include "tvvf_vo_c/core/controller.hpp"
 #include "tvvf_vo_c/core/global_field_generator.hpp"
 #include <memory>
 #include <vector>
@@ -32,7 +31,6 @@ public:
 
 private:
     // コア機能
-    std::unique_ptr<TVVFVOController> controller_;
     std::unique_ptr<GlobalFieldGenerator> global_field_generator_;
     TVVFVOConfig config_;
 
