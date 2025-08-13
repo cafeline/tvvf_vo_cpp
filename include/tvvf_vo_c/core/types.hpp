@@ -95,6 +95,11 @@ struct DynamicObstacle {
         : id(id), position(pos), velocity(vel), radius(r), 
           prediction_horizon(pred_horizon), uncertainty(uncert) {}
     
+    // GlobalFieldGeneratorとの互換性のためのコンストラクタ
+    DynamicObstacle(const Position& pos, const Velocity& vel, double r)
+        : id(0), position(pos), velocity(vel), radius(r), 
+          prediction_horizon(3.0), uncertainty(0.1) {}
+    
     Position predict_position(double time_delta) const;
 };
 

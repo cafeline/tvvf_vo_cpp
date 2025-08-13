@@ -37,6 +37,9 @@ add_library(${PROJECT_NAME}_core
   src/core/types.cpp
   src/core/tvvf_generator.cpp
   src/core/controller.cpp
+  src/core/wavefront_expander.cpp
+  src/core/fast_marching.cpp
+  src/core/global_field_generator.cpp
   src/ros/tvvf_vo_node.cpp
   src/ros/tvvf_vo_callbacks.cpp
   src/ros/tvvf_vo_control.cpp
@@ -141,13 +144,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
   
   # Add unit tests
-  # ament_add_gtest(test_${PROJECT_NAME}
-  #   test/test_astar.cpp
-  #   test/test_tvvf.cpp
-  #   test/test_vo.cpp
-  #   test/test_integration.cpp
-  # )
-  # target_link_libraries(test_${PROJECT_NAME} ${PROJECT_NAME}_core)
+  add_subdirectory(test)
 endif()
 
 ament_package()

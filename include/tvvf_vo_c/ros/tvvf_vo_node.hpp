@@ -13,6 +13,7 @@
 
 #include "tvvf_vo_c/core/types.hpp"
 #include "tvvf_vo_c/core/controller.hpp"
+#include "tvvf_vo_c/core/global_field_generator.hpp"
 #include <memory>
 #include <vector>
 #include <optional>
@@ -33,6 +34,7 @@ public:
 private:
     // コア機能
     std::unique_ptr<TVVFVOController> controller_;
+    std::unique_ptr<GlobalFieldGenerator> global_field_generator_;
     TVVFVOConfig config_;
 
     // 状態変数
@@ -41,6 +43,7 @@ private:
     std::vector<DynamicObstacle> dynamic_obstacles_;
     std::vector<DynamicObstacle> static_obstacles_;
     std::optional<Path> planned_path_;
+    std::optional<nav_msgs::msg::OccupancyGrid> current_map_;
     
     // TF2関連
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -57,7 +60,6 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr dynamic_obstacles_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr static_obstacles_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr path_sub_;
 
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
@@ -99,12 +101,6 @@ private:
      */
     void obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg, bool is_dynamic);
 
-    /**
-     * @brief adaptive_A_starからの経路データコールバック
-     * @param msg PoseArrayメッセージ
-     */
-    void path_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg);
-
 
     /**
      * @brief メイン制御ループ
@@ -141,6 +137,17 @@ private:
      * @brief 空の可視化マーカーを送信（クリア用）
      */
     void publish_empty_visualization();
+
+    /**
+     * @brief グローバルベクトル場の可視化
+     * @param field ベクトル場
+     */
+    void publish_global_field_visualization(const VectorField& field);
+
+    /**
+     * @brief パフォーマンス統計の表示
+     */
+    void log_performance_stats();
 
 };
 

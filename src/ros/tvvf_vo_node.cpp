@@ -12,6 +12,9 @@ namespace tvvf_vo_c
     // TVVF-VO制御器初期化
     config_ = create_config_from_parameters();
     controller_ = std::make_unique<TVVFVOController>(config_);
+    
+    // グローバルフィールドジェネレータ初期化
+    global_field_generator_ = std::make_unique<GlobalFieldGenerator>();
 
     // TF2関連初期化
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -39,10 +42,6 @@ namespace tvvf_vo_c
     static_obstacles_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
         "static_obstacles", 10, 
         [this](const visualization_msgs::msg::MarkerArray::SharedPtr msg) { obstacles_callback(msg, false); });
-
-    // adaptive_A_star からのA*経路データをsubscribe
-    path_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
-        "planned_path", 10, std::bind(&TVVFVONode::path_callback, this, std::placeholders::_1));
 
     // タイマー初期化（制御ループ：20Hz）
     control_timer_ = this->create_wall_timer(

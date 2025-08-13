@@ -10,12 +10,27 @@ namespace tvvf_vo_c
     goal_ = Goal(goal_position, this->get_parameter("goal_tolerance").as_double());
     planned_path_.reset();
     RCLCPP_INFO(this->get_logger(), "Goal set: (%.2f, %.2f)", goal_position.x, goal_position.y);
+    
+    // GlobalFieldGeneratorで静的場を再計算
+    if (current_map_.has_value() && global_field_generator_) {
+      global_field_generator_->precomputeStaticField(current_map_.value(), goal_position);
+      RCLCPP_INFO(this->get_logger(), "Static field precomputed for new goal");
+    }
   }
 
   void TVVFVONode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   {
     RCLCPP_INFO(this->get_logger(), "Map received: %dx%d, resolution: %.3f m/cell",
                 msg->info.width, msg->info.height, msg->info.resolution);
+    
+    // マップを保存
+    current_map_ = *msg;
+    
+    // GlobalFieldGeneratorで静的場を再計算（ゴールが設定されている場合）
+    if (goal_.has_value() && global_field_generator_) {
+      global_field_generator_->precomputeStaticField(*msg, goal_->position);
+      RCLCPP_INFO(this->get_logger(), "Static field precomputed for new map");
+    }
   }
 
   void TVVFVONode::obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg, bool is_dynamic)
@@ -30,29 +45,10 @@ namespace tvvf_vo_c
         Position position(marker.pose.position.x, marker.pose.position.y);
         Velocity velocity(0.0, 0.0);
         double radius = std::max(marker.scale.x, marker.scale.y) / 2.0;
-        obstacles.emplace_back(marker.id, position, velocity, radius);
+        // DynamicObstacle構造体は3つの引数を取る（IDは持たない）
+        obstacles.emplace_back(position, velocity, radius);
       }
     }
-  }
-
-  void TVVFVONode::path_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg)
-  {
-    if (msg->poses.empty())
-    {
-      planned_path_.reset();
-      RCLCPP_WARN(this->get_logger(), "Received empty path from external planner");
-      return;
-    }
-
-    Path new_path;
-    for (const auto& pose : msg->poses)
-    {
-      Position position(pose.position.x, pose.position.y);
-      new_path.add_point(position, 0.0);
-    }
-
-    planned_path_ = new_path;
-    RCLCPP_INFO(this->get_logger(), "Received external path: %zu points", planned_path_->size());
   }
 
 } // namespace tvvf_vo_c

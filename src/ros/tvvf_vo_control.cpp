@@ -36,6 +36,19 @@ namespace tvvf_vo_c
       all_obstacles.insert(all_obstacles.end(), dynamic_obstacles_.begin(), dynamic_obstacles_.end());
       all_obstacles.insert(all_obstacles.end(), static_obstacles_.begin(), static_obstacles_.end());
 
+      // GlobalFieldGeneratorでベクトル場生成
+      VectorField global_field;
+      if (global_field_generator_ && current_map_.has_value()) {
+        global_field = global_field_generator_->generateField(dynamic_obstacles_);
+        
+        // パフォーマンス統計をログ出力
+        if (this->count_subscribers("tvvf_vo_vector_field") > 0) {
+          double computation_time = global_field_generator_->getLastComputationTime();
+          RCLCPP_DEBUG(this->get_logger(), "Global field computation time: %.3f ms", 
+                       computation_time * 1000.0);
+        }
+      }
+
       // TVVF-VO制御更新
       ControlOutput control_output = controller_->update(
           robot_state_.value(), all_obstacles, goal_.value(), planned_path_);
@@ -46,7 +59,11 @@ namespace tvvf_vo_c
       // ベクトル場可視化
       if (this->get_parameter("enable_vector_field_viz").as_bool())
       {
-        publish_vector_field_visualization();
+        if (global_field.width > 0 && global_field.height > 0) {
+          publish_global_field_visualization(global_field);
+        } else {
+          publish_vector_field_visualization();
+        }
       }
     }
     catch (const std::exception &e)

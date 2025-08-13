@@ -1,0 +1,126 @@
+# TVVF-VO Global Field Navigation Parameters
+# 最適化された設定値
+
+tvvf_vo_global_field:
+  ros__parameters:
+    # ======================
+    # グローバルフィールド生成
+    # ======================
+    global_field:
+      # 斥力パラメータ
+      repulsive_gain: 1.5        # 斥力ゲイン（大きいほど障害物を強く回避）
+      influence_radius: 3.0       # 障害物の影響半径 [m]
+      min_distance: 0.1          # 最小距離（ゼロ除算防止）[m]
+      
+      # ブレンディングパラメータ
+      blend_weight: 0.6          # 動的障害物の影響度（0.0-1.0）
+      
+      # パフォーマンス設定
+      grid_stride: 5             # ベクトル場可視化の間隔
+      update_rate: 20.0          # フィールド更新レート [Hz]
+    
+    # ======================
+    # TVVF基本パラメータ
+    # ======================
+    tvvf:
+      k_attraction: 1.2          # ゴール引力ゲイン
+      k_repulsion: 2.5           # 障害物斥力ゲイン（基本）
+      influence_radius: 2.5      # TVVFでの影響半径 [m]
+      
+      # 時間ベクトル場
+      time_horizon: 3.0          # 予測時間範囲 [s]
+      prediction_steps: 10       # 予測ステップ数
+    
+    # ======================
+    # 経路統合パラメータ
+    # ======================
+    path_following:
+      k_path_attraction: 2.0     # 経路追従ゲイン
+      path_influence_radius: 2.0 # 経路の影響半径 [m]
+      lookahead_distance: 1.5    # 前方注視距離 [m]
+      path_deviation_threshold: 0.5  # 経路逸脱閾値 [m]
+    
+    # ======================
+    # 障害物回避パラメータ
+    # ======================
+    obstacle_avoidance:
+      safety_margin: 0.3         # 安全マージン [m]
+      emergency_stop_distance: 0.2  # 緊急停止距離 [m]
+      
+      # 動的障害物予測
+      prediction_horizon: 3.0    # 予測時間 [s]
+      uncertainty_growth_rate: 0.1  # 不確実性成長率 [m/s]
+      
+      # 静的障害物
+      static_inflation_radius: 0.15  # 静的障害物の膨張半径 [m]
+    
+    # ======================
+    # ロボット仕様パラメータ
+    # ======================
+    robot:
+      max_linear_velocity: 1.0   # 最大前進速度 [m/s]
+      max_angular_velocity: 2.0  # 最大角速度 [rad/s]
+      
+      # 加速度制限
+      max_linear_acceleration: 0.5   # 最大前進加速度 [m/s²]
+      max_angular_acceleration: 1.0  # 最大角加速度 [rad/s²]
+      
+      # ロボットサイズ
+      robot_radius: 0.25         # ロボット半径 [m]
+      footprint_padding: 0.05    # フットプリントの余裕 [m]
+    
+    # ======================
+    # 制御パラメータ
+    # ======================
+    control:
+      goal_tolerance: 0.2        # ゴール到達判定距離 [m]
+      orientation_tolerance: 0.2 # 向き許容誤差 [rad]
+      
+      # 差動二輪制御
+      orientation_priority_threshold: 0.3  # 回転優先閾値 [rad]
+      forward_gain: 1.0          # 前進ゲイン
+      rotation_gain: 2.0         # 回転ゲイン
+      
+      # スムージング
+      velocity_smoothing_factor: 0.8  # 速度平滑化係数（0.0-1.0）
+    
+    # ======================
+    # フレーム設定
+    # ======================
+    frames:
+      base_frame: "base_footprint"
+      global_frame: "map"
+      odom_frame: "odom"
+    
+    # ======================
+    # 可視化設定
+    # ======================
+    visualization:
+      enable_vector_field_viz: true
+      vector_field_resolution: 0.5   # ベクトル場の表示解像度 [m]
+      vector_field_range: 5.0        # ベクトル場の表示範囲 [m]
+      
+      # 矢印の表示設定
+      arrow_length: 0.3              # 矢印の長さ [m]
+      arrow_shaft_diameter: 0.05     # 矢印シャフトの太さ [m]
+      arrow_head_diameter: 0.1       # 矢印ヘッドの太さ [m]
+      
+      # 色設定（速度ベース）
+      color_mode: "speed"            # "speed", "direction", "fixed"
+      alpha: 0.7                     # 透明度
+    
+    # ======================
+    # デバッグ設定
+    # ======================
+    debug:
+      log_performance_stats: true    # パフォーマンス統計のログ出力
+      log_interval: 1.0              # ログ出力間隔 [s]
+      enable_profiling: false        # プロファイリング有効化
+      
+    # ======================
+    # システム設定
+    # ======================
+    system:
+      use_sim_time: true             # シミュレーション時間の使用
+      control_loop_rate: 20.0        # 制御ループレート [Hz]
+      map_update_rate: 1.0           # マップ更新レート [Hz]
