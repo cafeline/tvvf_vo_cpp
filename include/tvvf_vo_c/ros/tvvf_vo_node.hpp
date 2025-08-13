@@ -40,7 +40,6 @@ private:
     std::optional<RobotState> robot_state_;
     std::optional<Goal> goal_;
     std::vector<DynamicObstacle> dynamic_obstacles_;
-    std::vector<DynamicObstacle> static_obstacles_;
     std::optional<nav_msgs::msg::OccupancyGrid> current_map_;
     
     // TF2関連
@@ -56,7 +55,6 @@ private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr dynamic_obstacles_sub_;
-    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr static_obstacles_sub_;
 
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;

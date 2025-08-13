@@ -107,13 +107,6 @@ namespace tvvf_vo_c
 
   void TVVFVONode::log_performance_stats()
   {
-    if (global_field_generator_)
-    {
-      double computation_time = global_field_generator_->getLastComputationTime();
-      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                           "Global field computation time: %.3f ms", 
-                           computation_time * 1000.0);
-    }
     
   }
 

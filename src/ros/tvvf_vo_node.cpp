@@ -38,15 +38,10 @@ namespace tvvf_vo_c
         "dynamic_obstacles", 10, 
         [this](const visualization_msgs::msg::MarkerArray::SharedPtr msg) { obstacles_callback(msg, true); });
 
-    static_obstacles_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
-        "static_obstacles", 10, 
-        [this](const visualization_msgs::msg::MarkerArray::SharedPtr msg) { obstacles_callback(msg, false); });
-
     // タイマー初期化（制御ループ：20Hz）
     control_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50), std::bind(&TVVFVONode::control_loop, this));
 
-    RCLCPP_INFO(this->get_logger(), "TVVF-VO C++ Node initialized");
   }
 
   void TVVFVONode::setup_parameters()

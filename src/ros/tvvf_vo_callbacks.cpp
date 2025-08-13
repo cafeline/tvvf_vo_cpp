@@ -8,13 +8,10 @@ namespace tvvf_vo_c
   {
     Position goal_position(msg->point.x, msg->point.y);
     goal_ = Goal(goal_position, this->get_parameter("goal_tolerance").as_double());
-    RCLCPP_INFO(this->get_logger(), "Goal set: (%.2f, %.2f) with tolerance %.2f", 
-                goal_position.x, goal_position.y, goal_->tolerance);
     
     // GlobalFieldGeneratorで静的場を再計算
     if (current_map_.has_value() && global_field_generator_) {
       global_field_generator_->precomputeStaticField(current_map_.value(), goal_position);
-      RCLCPP_INFO(this->get_logger(), "Static field precomputed for new goal");
     } else {
       if (!current_map_.has_value()) {
         RCLCPP_WARN(this->get_logger(), "No map available for static field computation");
@@ -27,8 +24,6 @@ namespace tvvf_vo_c
 
   void TVVFVONode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   {
-    RCLCPP_INFO(this->get_logger(), "Map received: %dx%d, resolution: %.3f m/cell",
-                msg->info.width, msg->info.height, msg->info.resolution);
     
     // マップを保存
     current_map_ = *msg;
@@ -36,14 +31,17 @@ namespace tvvf_vo_c
     // GlobalFieldGeneratorで静的場を再計算（ゴールが設定されている場合）
     if (goal_.has_value() && global_field_generator_) {
       global_field_generator_->precomputeStaticField(*msg, goal_->position);
-      RCLCPP_INFO(this->get_logger(), "Static field precomputed for new map");
     }
   }
 
   void TVVFVONode::obstacles_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg, bool is_dynamic)
   {
-    auto& obstacles = is_dynamic ? dynamic_obstacles_ : static_obstacles_;
-    obstacles.clear();
+    if (!is_dynamic) {
+      // 静的障害物はマップに含まれるため無視
+      return;
+    }
+    
+    dynamic_obstacles_.clear();
 
     for (const auto &marker : msg->markers)
     {
@@ -53,7 +51,7 @@ namespace tvvf_vo_c
         Velocity velocity(0.0, 0.0);
         double radius = std::max(marker.scale.x, marker.scale.y) / 2.0;
         // DynamicObstacle構造体は3つの引数を取る（IDは持たない）
-        obstacles.emplace_back(position, velocity, radius);
+        dynamic_obstacles_.emplace_back(position, velocity, radius);
       }
     }
   }

@@ -34,7 +34,6 @@ namespace tvvf_vo_c
         publish_stop_command();
         goal_.reset();
         publish_empty_visualization();
-        RCLCPP_INFO(this->get_logger(), "Goal reached!");
         return;
       }
 
@@ -48,10 +47,6 @@ namespace tvvf_vo_c
         auto velocity_vector = global_field_generator_->getVelocityAt(
             robot_state_->position, dynamic_obstacles_);
 
-        // デバッグ: 速度ベクトルを出力
-        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                            "Global field velocity at robot: (%.6f, %.6f)",
-                            velocity_vector[0], velocity_vector[1]);
 
         // 速度ベクトルをスケーリング（正規化されているので最大速度を乗算）
         double max_vel = this->get_parameter("max_linear_velocity").as_double();
@@ -104,10 +99,6 @@ namespace tvvf_vo_c
     auto [linear_x, angular_z] = convert_to_differential_drive(
         desired_vx, desired_vy, robot_state_->orientation);
 
-    // デバッグ: 変換前後の値を出力
-    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                        "Velocity conversion: (vx:%.6f, vy:%.6f) -> (linear:%.6f, angular:%.6f)",
-                        desired_vx, desired_vy, linear_x, angular_z);
 
     auto cmd_msg = geometry_msgs::msg::Twist();
     cmd_msg.linear.x = linear_x;

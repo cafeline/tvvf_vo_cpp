@@ -35,7 +35,6 @@ include_directories(include)
 # Core library
 add_library(${PROJECT_NAME}_core
   src/core/types.cpp
-  src/core/tvvf_generator.cpp
   src/core/controller.cpp
   src/core/wavefront_expander.cpp
   src/core/fast_marching.cpp
@@ -45,7 +44,6 @@ add_library(${PROJECT_NAME}_core
   src/ros/tvvf_vo_control.cpp
   src/ros/tvvf_vo_visualization.cpp
   src/ros/tvvf_vo_tf.cpp
-  src/ros/visualizer.cpp
   src/utils/math_utils.cpp
   src/utils/time_utils.cpp
 )
