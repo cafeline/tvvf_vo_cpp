@@ -4,13 +4,17 @@
 namespace tvvf_vo_c
 {
 
-  TVVFVONode::TVVFVONode() : Node("tvvf_vo_c_node")
+  TVVFVONode::TVVFVONode() : Node("tvvf_vo_c_node"), 
+      visualization_counter_(0)
   {
     // パラメータ設定
     setup_parameters();
 
     // 設定初期化
     config_ = create_config_from_parameters();
+    
+    // 可視化パラメータの取得
+    visualization_interval_ = this->get_parameter("visualization_interval").as_int();
     
     // グローバルフィールドジェネレータ初期化
     global_field_generator_ = std::make_unique<GlobalFieldGenerator>();
@@ -67,6 +71,9 @@ namespace tvvf_vo_c
     // マップ端斥力パラメータ
     this->declare_parameter("map_repulsion_gain", 0.5);
     this->declare_parameter("map_repulsion_range", 1.0);
+    
+    // 可視化パラメータ
+    this->declare_parameter("visualization_interval", 5);
     
   }
 

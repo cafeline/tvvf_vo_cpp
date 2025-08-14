@@ -56,6 +56,10 @@ private:
 
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
+    
+    // 可視化制御
+    int visualization_counter_;  // 可視化処理のカウンタ
+    int visualization_interval_;  // 可視化更新間隔
 
 
     /**
