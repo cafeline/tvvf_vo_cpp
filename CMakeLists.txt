@@ -42,8 +42,8 @@ add_library(${PROJECT_NAME}_core
   src/ros/tvvf_vo_node.cpp
   src/ros/tvvf_vo_callbacks.cpp
   src/ros/tvvf_vo_control.cpp
+  src/ros/tvvf_vo_control_helpers.cpp
   src/ros/tvvf_vo_visualization.cpp
-  src/ros/tvvf_vo_combined_visualization.cpp
   src/ros/tvvf_vo_tf.cpp
   src/utils/math_utils.cpp
   src/utils/time_utils.cpp

@@ -20,6 +20,17 @@
 
 namespace tvvf_vo_c {
 
+// 可視化パラメータの定数
+namespace visualization_constants {
+    constexpr int DEFAULT_GRID_STRIDE = 5;           // グリッドサンプリング間隔
+    constexpr double DEFAULT_ARROW_LENGTH = 0.3;     // 矢印の長さ[m]
+    constexpr double ARROW_SHAFT_WIDTH = 0.05;       // 矢印シャフトの太さ
+    constexpr double ARROW_HEAD_WIDTH = 0.1;         // 矢印ヘッドの太さ
+    constexpr double ARROW_ALPHA = 0.7;              // 矢印の透明度
+    constexpr double MIN_VECTOR_MAGNITUDE = 0.01;    // 表示する最小ベクトル大きさ
+    constexpr double MARKER_LIFETIME_SEC = 0.1;      // マーカーの寿命[秒]
+}
+
 /**
  * @brief TVVF-VO ROS2ナビゲーションノード
  */
@@ -135,6 +146,31 @@ private:
      * @param field 元のベクトル場
      */
     void publish_combined_field_visualization(const VectorField& field);
+
+private:
+    // 制御ループヘルパー関数
+    bool update_robot_state();
+    bool has_valid_goal() const;
+    bool is_goal_reached() const;
+    void handle_goal_reached();
+    ControlOutput compute_control_output();
+    void apply_repulsive_force(std::array<double, 2>& velocity_vector);
+    void scale_velocity_vector(std::array<double, 2>& velocity_vector);
+    void update_visualization();
+    
+private:
+    // 可視化ヘルパー関数
+    std::array<double, 2> calculate_combined_vector(
+        const std::array<double, 2>& original_vector, 
+        const Position& world_pos) const;
+    
+    bool should_visualize_vector(const std::array<double, 2>& vector) const;
+    
+    visualization_msgs::msg::Marker create_arrow_marker(
+        const Position& position,
+        const std::array<double, 2>& vector,
+        int marker_id,
+        const std::string& frame_id) const;
 
 };
 

@@ -10,85 +10,29 @@ namespace tvvf_vo_c
   {
     try
     {
-      // ロボット状態の更新
-      robot_state_ = get_robot_pose_from_tf();
-
-      // 状態チェック
-      if (!robot_state_.has_value())
-      {
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                             "Cannot get robot pose from TF");
+      // ロボット状態の更新とチェック
+      if (!update_robot_state()) {
         return;
       }
 
-      if (!goal_.has_value())
-      {
-        // ゴールが設定されていない場合は何もしない（これは正常）
+      // ゴールのチェック
+      if (!has_valid_goal()) {
         return;
       }
 
       // 目標到達チェック
-      double distance_to_goal = robot_state_->position.distance_to(goal_->position);
-      if (distance_to_goal < goal_->tolerance)
-      {
-        publish_stop_command();
-        goal_.reset();
-        publish_empty_visualization();
+      if (is_goal_reached()) {
+        handle_goal_reached();
         return;
       }
 
-      // 動的障害物のみ使用（静的障害物はマップに含まれる）
+      // 制御出力を計算
+      const auto control_output = compute_control_output();
+      
+      // 可視化を更新
+      update_visualization();
 
-      // GlobalFieldGeneratorでベクトル場生成
-      ControlOutput control_output;
-
-      if (global_field_generator_ && global_field_generator_->isStaticFieldReady()) {
-        // GlobalFieldGeneratorから速度ベクトルを取得
-        auto velocity_vector = global_field_generator_->getVelocityAt(
-            robot_state_->position, dynamic_obstacles_);
-
-        // 静的障害物からの斥力を計算して追加
-        if (static_obstacles_.has_value() && repulsive_force_calculator_) {
-          auto repulsive_force = repulsive_force_calculator_->calculateTotalForce(
-              robot_state_->position, static_obstacles_.value());
-          velocity_vector[0] += repulsive_force.x;
-          velocity_vector[1] += repulsive_force.y;
-        }
-
-        // 速度ベクトルをスケーリング（正規化されているので最大速度を乗算）
-        double max_vel = this->get_parameter("max_linear_velocity").as_double();
-        velocity_vector[0] *= max_vel;
-        velocity_vector[1] *= max_vel;
-
-        // ControlOutputを作成
-        control_output = ControlOutput(
-            Velocity(velocity_vector[0], velocity_vector[1]),
-            0.01,  // computation_time
-            0.01,  // dt
-            1.0    // confidence
-        );
-
-        // ベクトル場の可視化用にフィールドを生成
-        if (this->count_subscribers("tvvf_vo_vector_field") > 0) {
-          VectorField global_field = global_field_generator_->generateField(dynamic_obstacles_);
-          if (global_field.width > 0 && global_field.height > 0) {
-            // 合成ベクトル場を表示
-            publish_combined_field_visualization(global_field);
-          }
-        }
-      } else {
-        // GlobalFieldGeneratorが準備できていない場合は停止
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                            "Global field not ready - stopping");
-        control_output = ControlOutput(
-            Velocity(0.0, 0.0),
-            0.01,
-            0.01,
-            0.0
-        );
-      }
-
-      // 制御コマンド発行
+      // 制御コマンドを発行
       publish_control_command(control_output);
     }
     catch (const std::exception &e)
