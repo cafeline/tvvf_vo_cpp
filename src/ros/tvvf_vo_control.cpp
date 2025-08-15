@@ -72,8 +72,8 @@ namespace tvvf_vo_c
         if (this->count_subscribers("tvvf_vo_vector_field") > 0) {
           VectorField global_field = global_field_generator_->generateField(dynamic_obstacles_);
           if (global_field.width > 0 && global_field.height > 0) {
-            // 合成ベクトル場（元、斥力、合成を全て含む）を表示
-            publish_combined_field_visualization(global_field, robot_state_->position);
+            // 合成ベクトル場を表示
+            publish_combined_field_visualization(global_field);
           }
         }
       } else {

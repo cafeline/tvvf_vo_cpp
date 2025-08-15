@@ -50,7 +50,6 @@ private:
 
     // パブリッシャー
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vector_field_pub_;
 
     // サブスクライバー
@@ -127,32 +126,15 @@ private:
     void publish_stop_command();
 
     /**
-     * @brief ベクトル場可視化マーカーを配信
-     */
-    void publish_vector_field_visualization();
-
-    /**
      * @brief 空の可視化マーカーを送信（クリア用）
      */
     void publish_empty_visualization();
-
-    /**
-     * @brief グローバルベクトル場の可視化
-     * @param field ベクトル場
-     */
-    void publish_global_field_visualization(const VectorField& field);
     
     /**
      * @brief 合成ベクトル場の可視化（斥力込み）
      * @param field 元のベクトル場
-     * @param robot_pos ロボット位置
      */
-    void publish_combined_field_visualization(const VectorField& field, const Position& robot_pos);
-
-    /**
-     * @brief パフォーマンス統計の表示
-     */
-    void log_performance_stats();
+    void publish_combined_field_visualization(const VectorField& field);
 
 };
 

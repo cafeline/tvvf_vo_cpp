@@ -1,11 +1,10 @@
 #include "tvvf_vo_c/ros/tvvf_vo_node.hpp"
-#include <tf2/LinearMath/Quaternion.h>
 #include <cmath>
 
 namespace tvvf_vo_c
 {
 
-  void TVVFVONode::publish_combined_field_visualization(const VectorField& field, const Position& robot_pos)
+  void TVVFVONode::publish_combined_field_visualization(const VectorField& field)
   {
     try
     {
@@ -47,24 +46,24 @@ namespace tvvf_vo_c
           double combined_vx = original_vec[0] + repulsive_force.x;
           double combined_vy = original_vec[1] + repulsive_force.y;
           
-          // 合成ベクトルの可視化のみ
+          // 合成ベクトルの可視化
           if (std::abs(combined_vx) > 0.01 || std::abs(combined_vy) > 0.01)
           {
-            auto combined_marker = visualization_msgs::msg::Marker();
-            combined_marker.header.frame_id = global_frame;
-            combined_marker.header.stamp = this->get_clock()->now();
-            combined_marker.id = marker_id++;
-            combined_marker.type = visualization_msgs::msg::Marker::ARROW;
-            combined_marker.action = visualization_msgs::msg::Marker::ADD;
+            auto marker = visualization_msgs::msg::Marker();
+            marker.header.frame_id = global_frame;
+            marker.header.stamp = this->get_clock()->now();
+            marker.id = marker_id++;
+            marker.type = visualization_msgs::msg::Marker::ARROW;
+            marker.action = visualization_msgs::msg::Marker::ADD;
             
             geometry_msgs::msg::Point start, end;
             start.x = world_pos.x;
             start.y = world_pos.y;
-            start.z = 0.0;  // Z座標を0に戻す
+            start.z = 0.0;
             
             // 合成ベクトルを正規化してから表示
             double magnitude = std::sqrt(combined_vx * combined_vx + combined_vy * combined_vy);
-            double arrow_length = 0.4;  // 合成は少し長く
+            double arrow_length = 0.3;
             
             if (magnitude > 0.01) {
               end.x = world_pos.x + (combined_vx / magnitude) * arrow_length;
@@ -75,21 +74,21 @@ namespace tvvf_vo_c
             }
             end.z = 0.0;
             
-            combined_marker.points.push_back(start);
-            combined_marker.points.push_back(end);
+            marker.points.push_back(start);
+            marker.points.push_back(end);
             
-            combined_marker.scale.x = 0.05;  // シャフトの太さ
-            combined_marker.scale.y = 0.1;   // ヘッドの太さ
-            combined_marker.scale.z = 0.0;
+            marker.scale.x = 0.05;  // シャフトの太さ
+            marker.scale.y = 0.1;   // ヘッドの太さ
+            marker.scale.z = 0.0;
             
-            // 緑色で合成結果を表示
-            combined_marker.color.r = 0.0;
-            combined_marker.color.g = 1.0;
-            combined_marker.color.b = 0.0;
-            combined_marker.color.a = 0.9;
+            // 速度に基づく色（元の実装と同様）
+            marker.color.r = magnitude;
+            marker.color.g = 1.0 - magnitude;
+            marker.color.b = 0.0;
+            marker.color.a = 0.7;
             
-            combined_marker.lifetime = rclcpp::Duration::from_seconds(0.1);
-            marker_array.markers.push_back(combined_marker);
+            marker.lifetime = rclcpp::Duration::from_seconds(0.1);
+            marker_array.markers.push_back(marker);
           }
         }
       }
