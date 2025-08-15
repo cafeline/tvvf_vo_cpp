@@ -47,6 +47,13 @@ namespace tvvf_vo_c
         auto velocity_vector = global_field_generator_->getVelocityAt(
             robot_state_->position, dynamic_obstacles_);
 
+        // 静的障害物からの斥力を計算して追加
+        if (static_obstacles_.has_value() && repulsive_force_calculator_) {
+          auto repulsive_force = repulsive_force_calculator_->calculateTotalForce(
+              robot_state_->position, static_obstacles_.value());
+          velocity_vector[0] += repulsive_force.x;
+          velocity_vector[1] += repulsive_force.y;
+        }
 
         // 速度ベクトルをスケーリング（正規化されているので最大速度を乗算）
         double max_vel = this->get_parameter("max_linear_velocity").as_double();
@@ -65,7 +72,8 @@ namespace tvvf_vo_c
         if (this->count_subscribers("tvvf_vo_vector_field") > 0) {
           VectorField global_field = global_field_generator_->generateField(dynamic_obstacles_);
           if (global_field.width > 0 && global_field.height > 0) {
-            publish_global_field_visualization(global_field);
+            // 合成ベクトル場（元、斥力、合成を全て含む）を表示
+            publish_combined_field_visualization(global_field, robot_state_->position);
           }
         }
       } else {

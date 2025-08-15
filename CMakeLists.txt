@@ -38,10 +38,12 @@ add_library(${PROJECT_NAME}_core
   src/core/wavefront_expander.cpp
   src/core/fast_marching.cpp
   src/core/global_field_generator.cpp
+  src/core/repulsive_force.cpp
   src/ros/tvvf_vo_node.cpp
   src/ros/tvvf_vo_callbacks.cpp
   src/ros/tvvf_vo_control.cpp
   src/ros/tvvf_vo_visualization.cpp
+  src/ros/tvvf_vo_combined_visualization.cpp
   src/ros/tvvf_vo_tf.cpp
   src/utils/math_utils.cpp
   src/utils/time_utils.cpp

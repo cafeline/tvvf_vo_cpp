@@ -12,6 +12,7 @@
 
 #include "tvvf_vo_c/core/types.hpp"
 #include "tvvf_vo_c/core/global_field_generator.hpp"
+#include "tvvf_vo_c/core/repulsive_force.hpp"
 #include <memory>
 #include <vector>
 #include <optional>
@@ -32,13 +33,16 @@ public:
 private:
     // コア機能
     std::unique_ptr<GlobalFieldGenerator> global_field_generator_;
+    std::unique_ptr<RepulsiveForceCalculator> repulsive_force_calculator_;
     TVVFVOConfig config_;
+    RepulsiveForceConfig repulsive_config_;
 
     // 状態変数
     std::optional<RobotState> robot_state_;
     std::optional<Goal> goal_;
     std::vector<DynamicObstacle> dynamic_obstacles_;
     std::optional<nav_msgs::msg::OccupancyGrid> current_map_;
+    std::optional<visualization_msgs::msg::MarkerArray> static_obstacles_;
     
     // TF2関連
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -53,6 +57,7 @@ private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr dynamic_obstacles_sub_;
+    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr static_obstacles_sub_;
 
     // タイマー
     rclcpp::TimerBase::SharedPtr control_timer_;
@@ -136,6 +141,13 @@ private:
      * @param field ベクトル場
      */
     void publish_global_field_visualization(const VectorField& field);
+    
+    /**
+     * @brief 合成ベクトル場の可視化（斥力込み）
+     * @param field 元のベクトル場
+     * @param robot_pos ロボット位置
+     */
+    void publish_combined_field_visualization(const VectorField& field, const Position& robot_pos);
 
     /**
      * @brief パフォーマンス統計の表示
