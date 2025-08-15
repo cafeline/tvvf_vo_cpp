@@ -94,13 +94,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
 )
 
 # Test executable
-add_executable(test_repulsive_force test/test_repulsive_force.cpp)
-target_link_libraries(test_repulsive_force ${PROJECT_NAME}_core)
-ament_target_dependencies(test_repulsive_force ${DEPENDENCIES})
-
-add_executable(test_repulsion_only test/test_repulsion_only.cpp)
-target_link_libraries(test_repulsion_only ${PROJECT_NAME}_core)
-ament_target_dependencies(test_repulsion_only ${DEPENDENCIES})
+# (test files removed - they don't exist)
 
 # Install targets
 install(TARGETS ${PROJECT_NAME}_core
@@ -110,7 +104,7 @@ install(TARGETS ${PROJECT_NAME}_core
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS ${PROJECT_NAME}_node test_repulsive_force test_repulsion_only
+install(TARGETS ${PROJECT_NAME}_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
